@@ -116,15 +116,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   function esc(s){ return String(s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
   function rowHTML(u, pos){
+    // 左侧始终显示全站粉丝排名（u[0]），不是搜索结果序号
+    var gRank = u[0];
     var cls = 'row';
-    if (sortMode === 'fan'){
-      if (pos===1) cls+=' top1';
-      else if (pos<=3) cls+=' top2';
-      else if (pos<=10) cls+=' top3';
-    }
+    if (gRank===1) cls+=' top1';
+    else if (gRank<=3) cls+=' top2';
+    else if (gRank<=10) cls+=' top3';
     if (u[7]) cls+=' pin';
-    return '<div class="'+cls+'" data-i="'+u[0]+'">'
-      + '<div class="rk">'+pos+'</div>'
+    return '<div class="'+cls+'" data-i="'+gRank+'">'
+      + '<div class="rk">'+gRank+'</div>'
       + '<div class="mid"><div class="nm">'+esc(u[2])+'</div>'
       + '<div class="sub"><span>Lv.'+u[6]+'</span><span class="uid">'+esc(u[1])+'</span></div></div>'
       + '<div class="fan">'+fmt(u[3])+'<span>粉丝</span></div></div>';
@@ -200,7 +200,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
       }
       items = applySort(items);
       barEl.innerHTML = '匹配 <b>' + items.length + '</b> 个账号 · 按' +
-        (sortMode==='fan'?'粉丝':sortMode==='level'?'等级':'ID') + '排序';
+        (sortMode==='fan'?'粉丝':sortMode==='level'?'等级':'ID') + '排序 · 序号为全站排名';
     }
     if (!items.length){
       barEl.innerHTML += ' <span style="color:#bbb">（无结果）</span>';
