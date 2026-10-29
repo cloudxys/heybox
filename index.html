@@ -16,8 +16,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 .search .clear{flex:0 0 auto;width:38px;height:38px;border:none;background:#f7f8fa;border-radius:8px;font-size:16px;color:#888;cursor:pointer;display:none;line-height:1}
 .search .clear.on{display:block}
 
-.bar{flex:0 0 auto;padding:6px 14px;font-size:12px;color:#888;background:#fafbfc;border-bottom:1px solid #eee}
+.bar{flex:0 0 auto;padding:5px 14px;font-size:12px;color:#888;background:#fafbfc;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .bar b{color:#2c5f8e}
+.sorts{display:flex;gap:4px;flex:0 0 auto}
+.sorts button{border:1px solid #dcdfe4;background:#fff;color:#666;font-size:12px;padding:3px 9px;border-radius:12px;cursor:pointer;font-family:inherit;line-height:1.4;white-space:nowrap}
+.sorts button.on{background:#2c5f8e;border-color:#2c5f8e;color:#fff;font-weight:500}
 
 .list{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;position:relative}
 .spacer{position:relative;width:100%}
@@ -66,7 +69,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     <input id="q" type="search" placeholder="搜索昵称或用户ID" autocomplete="off" autocorrect="off" spellcheck="false">
     <button class="clear" id="clr">✕</button>
   </div>
-  <div class="bar" id="bar"></div>
+  <div class="bar">
+    <span id="bar"></span>
+    <div class="sorts">
+      <button data-sort="fan" class="on">粉丝</button>
+      <button data-sort="level">等级</button>
+      <button data-sort="id">ID</button>
+    </div>
+  </div>
   <div class="list" id="list">
     <div class="spacer" id="spacer"><div class="win" id="win"></div></div>
   </div>
@@ -105,14 +115,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   function fmt(n){ return n.toLocaleString('en-US'); }
   function esc(s){ return String(s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
-  function rowHTML(u){
+  function rowHTML(u, pos){
     var cls = 'row';
-    if (u[0]===1) cls+=' top1';
-    else if (u[0]<=3) cls+=' top2';
-    else if (u[0]<=10) cls+=' top3';
+    if (sortMode === 'fan'){
+      if (pos===1) cls+=' top1';
+      else if (pos<=3) cls+=' top2';
+      else if (pos<=10) cls+=' top3';
+    }
     if (u[7]) cls+=' pin';
     return '<div class="'+cls+'" data-i="'+u[0]+'">'
-      + '<div class="rk">'+u[0]+'</div>'
+      + '<div class="rk">'+pos+'</div>'
       + '<div class="mid"><div class="nm">'+esc(u[2])+'</div>'
       + '<div class="sub"><span>Lv.'+u[6]+'</span><span class="uid">'+esc(u[1])+'</span></div></div>'
       + '<div class="fan">'+fmt(u[3])+'<span>粉丝</span></div></div>';
@@ -136,7 +148,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     winEl.style.transform = 'translateY(' + (start * ROW_H) + 'px)';
 
     var parts = [];
-    for (var i = start; i < end; i++) parts.push(rowHTML(view[i]));
+    for (var i = start; i < end; i++) parts.push(rowHTML(view[i], i + 1));
     winEl.innerHTML = parts.join('');
   }
 
@@ -152,20 +164,43 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     }
   }
 
+  var sortMode = 'fan';
+
+  function applySort(items){
+    if (sortMode === 'fan'){
+      return items.sort(function(a,b){ return a[3] !== b[3] ? b[3]-a[3] : a[0]-b[0]; });
+    } else if (sortMode === 'level'){
+      return items.sort(function(a,b){
+        if (a[6] !== b[6]) return b[6]-a[6];
+        if (a[3] !== b[3]) return b[3]-a[3];
+        return a[0]-b[0];
+      });
+    } else {
+      return items.sort(function(a,b){
+        var x = parseInt(a[1],10), y = parseInt(b[1],10);
+        return x !== y ? x-y : a[0]-b[0];
+      });
+    }
+  }
+
   function doSearch(){
     var kw = qEl.value.trim().toLowerCase();
     clrEl.className = kw ? 'clear on' : 'clear';
     var items;
     if (!kw){
-      items = DATA;
-      barEl.innerHTML = '共 <b>' + DATA.length + '</b> 个账号';
+      items = DATA.slice();
+      items = applySort(items);
+      barEl.innerHTML = '共 <b>' + DATA.length + '</b> 个账号 · 按' +
+        (sortMode==='fan'?'粉丝':sortMode==='level'?'等级':'ID') + '排序';
     } else {
       items = [];
       for (var i = 0; i < DATA.length; i++){
         var u = DATA[i];
         if (u[2].toLowerCase().indexOf(kw) > -1 || u[1].indexOf(kw) > -1) items.push(u);
       }
-      barEl.innerHTML = '匹配 <b>' + items.length + '</b> 个账号';
+      items = applySort(items);
+      barEl.innerHTML = '匹配 <b>' + items.length + '</b> 个账号 · 按' +
+        (sortMode==='fan'?'粉丝':sortMode==='level'?'等级':'ID') + '排序';
     }
     if (!items.length){
       barEl.innerHTML += ' <span style="color:#bbb">（无结果）</span>';
@@ -206,6 +241,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
         mbodyEl.scrollTop = Math.max(0, box);
       }
     }, 20);
+  }
+
+  var sortBtns = document.querySelectorAll('.sorts button');
+  for (var si = 0; si < sortBtns.length; si++){
+    (function(btn){
+      btn.addEventListener('click', function(){
+        for (var k = 0; k < sortBtns.length; k++) sortBtns[k].className = '';
+        btn.className = 'on';
+        sortMode = btn.getAttribute('data-sort');
+        doSearch();
+      });
+    })(sortBtns[si]);
   }
 
   listEl.addEventListener('scroll', function(){ paint(false); }, { passive: true });
