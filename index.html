@@ -245,101 +245,168 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     }, 20);
   }
 
-  /* ===== 生成卡片图片 ===== */
+  /* ===== 生成卡片图片（复刻详情弹窗） ===== */
   function buildCard(u, cb){
-    var W = 640, H = 400;
+    var idx = u[0]-1;
+    var from = Math.max(0, idx-10), to = Math.min(DATA.length, idx+11);
+    var nearRows = [];
+    for (var i=from;i<to;i++) nearRows.push(DATA[i]);
+
+    var W = 600;
+    var HEADER_H = 116;
+    var STATS_H = 92;
+    var GRP_H = 40;
+    var ROW_H2 = 50;
+    var PAD = 20;
+    var H = HEADER_H + STATS_H + GRP_H + ROW_H2*nearRows.length + 56;
+
     var dpr = 2;
     var cv = document.createElement('canvas');
     cv.width = W*dpr; cv.height = H*dpr;
     var x = cv.getContext('2d');
     x.scale(dpr, dpr);
 
-    // 背景渐变
-    var g = x.createLinearGradient(0,0,W,H);
-    g.addColorStop(0,'#0f3d5c'); g.addColorStop(1,'#1f4e79');
-    x.fillStyle = g; x.fillRect(0,0,W,H);
+    // 白底
+    x.fillStyle='#ffffff'; x.fillRect(0,0,W,H);
 
-    // 装饰圆
-    x.fillStyle = 'rgba(232,116,59,0.10)';
-    x.beginPath(); x.arc(W-50, H+40, 200, 0, Math.PI*2); x.fill();
-    x.fillStyle = 'rgba(255,255,255,0.04)';
-    x.beginPath(); x.arc(60, -40, 160, 0, Math.PI*2); x.fill();
+    var FF = '-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
 
-    // 顶部标签
-    x.fillStyle = u[8] ? 'rgba(232,116,59,0.9)' : 'rgba(255,255,255,0.13)';
-    roundRect(x, 32, 26, u[8]?86:76, 26, 13); x.fill();
-    x.fillStyle = '#fff'; x.font = '13px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-    x.textAlign='center'; x.textBaseline='middle';
-    x.fillText(u[8] ? '个人账号' : '官方账号', 32+(u[8]?43:38), 40);
-
-    // 排名
+    // ===== 头部 =====
     x.textAlign='left'; x.textBaseline='alphabetic';
-    x.fillStyle='rgba(255,255,255,0.55)';
-    x.font='13px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-    x.fillText('全站排名', 32, 92);
-    x.fillStyle='#FFD966';
-    x.font='bold 46px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-    x.fillText('#'+u[0], 32, 140);
-
-    // 昵称
-    x.fillStyle='#fff';
-    var nm = u[2], fsz = 30;
-    x.font = 'bold '+fsz+'px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-    while (x.measureText(nm).width > W-64 && fsz > 16){
-      fsz -= 2;
-      x.font = 'bold '+fsz+'px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+    x.fillStyle='#1a1a1a';
+    var nm = u[2], fsz = 26;
+    x.font = 'bold '+fsz+'px '+FF;
+    while (x.measureText(nm).width > W-PAD*2 && fsz > 15){
+      fsz -= 1; x.font = 'bold '+fsz+'px '+FF;
     }
-    x.fillText(nm, 32, 192);
+    x.fillText(nm, PAD, 44);
 
-    // ID
-    x.fillStyle='rgba(255,255,255,0.45)';
-    x.font='14px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-    x.fillText('ID: '+u[1], 32, 218);
+    // 个人标签
+    if (u[8]){
+      var tw = x.measureText(nm).width;
+      x.fillStyle='#fce4ef';
+      var tagX = PAD + tw + 10;
+      roundRect(x, tagX, 24, 40, 20, 4); x.fill();
+      x.fillStyle='#c00060';
+      x.font='bold 11px '+FF;
+      x.fillText('个人', tagX+8, 38);
+    }
 
-    // 四个数据格
-    var items = [
-      ['粉丝', fmt(u[3])],
-      ['关注', fmt(u[4])],
-      ['发帖', fmt(u[5])],
-      ['点赞收藏', fmt(u[7])],
-      ['等级', 'Lv.'+u[6]]
+    x.fillStyle='#9aa0a6';
+    x.font='13px '+FF;
+    x.fillText('ID: '+u[1], PAD, 72);
+
+    // 分隔线
+    x.strokeStyle='#eeeeee'; x.lineWidth=1;
+    x.beginPath(); x.moveTo(0, HEADER_H-0.5); x.lineTo(W, HEADER_H-0.5); x.stroke();
+
+    // ===== 数据区（6 格）=====
+    var stats = [
+      ['#'+u[0], '排名'],
+      [fmt(u[3]), '粉丝'],
+      [fmt(u[4]), '关注'],
+      [fmt(u[5]), '发帖'],
+      [fmt(u[7]), '点赞收藏'],
+      ['Lv.'+u[6], '等级']
     ];
-    var cw = (W-64-4*12)/5, cy = 258, ch = 88;
-    for (var i=0;i<items.length;i++){
-      var cx = 32 + i*(cw+12);
-      x.fillStyle='rgba(255,255,255,0.08)';
-      roundRect(x, cx, cy, cw, ch, 10); x.fill();
-      x.strokeStyle='rgba(255,255,255,0.14)'; x.lineWidth=1;
-      roundRect(x, cx, cy, cw, ch, 10); x.stroke();
+    var cellW = (W-0)/6;
+    var sy = HEADER_H;
 
-      x.textAlign='center';
-      x.fillStyle='#FFD966';
-      var vf = 17;
-      x.font='bold '+vf+'px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-      var vt = items[i][1];
-      while (x.measureText(vt).width > cw-12 && vf > 10){
-        vf -= 1;
-        x.font='bold '+vf+'px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+    // 上下边框
+    x.strokeStyle='#f0f1f3'; x.lineWidth=1;
+    x.beginPath(); x.moveTo(0, sy+0.5); x.lineTo(W, sy+0.5); x.stroke();
+    x.beginPath(); x.moveTo(0, sy+STATS_H-0.5); x.lineTo(W, sy+STATS_H-0.5); x.stroke();
+
+    for (var i=0;i<stats.length;i++){
+      var cx = i*cellW;
+      // 竖分隔线
+      if (i>0){
+        x.strokeStyle='#f0f1f3';
+        x.beginPath(); x.moveTo(cx+0.5, sy); x.lineTo(cx+0.5, sy+STATS_H); x.stroke();
       }
-      x.fillText(vt, cx+cw/2, cy+38);
-      x.fillStyle='rgba(255,255,255,0.55)';
-      x.font='11px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-      x.fillText(items[i][0], cx+cw/2, cy+62);
+      x.textAlign='center';
+      x.fillStyle='#2c5f8e';
+      var vf = 20;
+      x.font='bold '+vf+'px '+FF;
+      var vt = stats[i][0];
+      while (x.measureText(vt).width > cellW-10 && vf > 10){
+        vf -= 1; x.font='bold '+vf+'px '+FF;
+      }
+      x.fillText(vt, cx+cellW/2, sy+42);
+      x.fillStyle='#9aa0a6';
+      x.font='11px '+FF;
+      x.fillText(stats[i][1], cx+cellW/2, sy+66);
+    }
+    x.textAlign='left';
+
+    // ===== 排名相近 =====
+    var gy = HEADER_H + STATS_H;
+    x.fillStyle='#fafbfc'; x.fillRect(0, gy, W, GRP_H);
+    x.fillStyle='#9aa0a6'; x.font='12px '+FF;
+    x.textBaseline='middle';
+    x.fillText('排名相近', PAD, gy+GRP_H/2);
+    x.textBaseline='alphabetic';
+
+    var ry = gy + GRP_H;
+    for (var j=0;j<nearRows.length;j++){
+      var r = nearRows[j];
+      var isSelf = (r[0] === u[0]);
+      var rowY = ry + j*ROW_H2;
+
+      if (isSelf){
+        x.fillStyle='#fff9e6'; x.fillRect(0, rowY, W, ROW_H2);
+        x.fillStyle='#f0b400'; x.fillRect(0, rowY, 3, ROW_H2);
+      }
+      // 底部细线
+      x.strokeStyle = j===nearRows.length-1 ? '#f0f1f3' : '#f7f8fa';
+      x.lineWidth=1;
+      x.beginPath(); x.moveTo(0, rowY+ROW_H2-0.5); x.lineTo(W, rowY+ROW_H2-0.5); x.stroke();
+
+      var textY = rowY + ROW_H2/2 + 5;
+
+      // 排名
+      x.fillStyle = isSelf ? '#c07a00' : '#9aa0a6';
+      x.font='bold 12px '+FF;
+      x.textAlign='center';
+      x.fillText(String(r[0]), PAD+16, textY);
+      x.textAlign='left';
+
+      // 昵称
+      x.fillStyle='#1a1a1a';
+      x.font=(isSelf?'bold ':'')+'14px '+FF;
+      var rn = r[2];
+      var maxW = W - PAD*2 - 32 - 100;
+      while (x.measureText(rn).width > maxW && rn.length > 1){
+        rn = rn.slice(0,-1);
+      }
+      if (rn !== r[2]) rn = rn.slice(0,-1)+'…';
+      x.fillText(rn, PAD+46, textY);
+
+      // 粉丝数
+      x.fillStyle='#2c5f8e';
+      x.font=(isSelf?'bold ':'')+'13px '+FF;
+      x.textAlign='right';
+      x.fillText(fmt(r[3]), W-PAD, textY);
       x.textAlign='left';
     }
 
-    // 底部
+    // ===== 页脚 =====
+    var fy = ry + ROW_H2*nearRows.length;
     var dt = new Date();
     var ds = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
-    x.fillStyle='rgba(255,255,255,0.35)';
-    x.font='11px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-    x.fillText('数据截止 '+ds+'  ·  来源：小黑盒公开主页', 32, H-22);
-    x.textAlign='right';
-    x.fillStyle='rgba(255,255,255,0.28)';
-    x.fillText('小黑盒粉丝排行榜', W-32, H-22);
+    x.fillStyle='#fafbfc'; x.fillRect(0, fy, W, 56);
+    x.strokeStyle='#eeeeee'; x.lineWidth=1;
+    x.beginPath(); x.moveTo(0, fy+0.5); x.lineTo(W, fy+0.5); x.stroke();
+
+    x.fillStyle='#9aa0a6'; x.font='11px '+FF;
+    x.textAlign='center';
+    x.fillText('数据截止 '+ds+'  ·  来源：小黑盒公开主页  ·  按粉丝数降序', W/2, fy+32);
+    x.textAlign='left';
 
     cb(cv);
   }
+
+  function format(n){ return (n||0).toLocaleString('en-US'); }
 
   function roundRect(ctx,x,y,w,h,r){
     ctx.beginPath();
@@ -362,7 +429,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
         var name = curUser[2].replace(/[\\/:*?"<>|]/g,'_');
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
-        a.href = url; a.download = '小黑盒排名_第'+curUser[0]+'名_'+name+'.png';
+        a.href = url; a.download = '小黑盒_第'+curUser[0]+'名_'+name+'.png';
         document.body.appendChild(a); a.click();
         document.body.removeChild(a);
         setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
