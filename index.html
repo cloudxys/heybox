@@ -281,15 +281,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     }
     x.fillText(nm, PAD, 44);
 
-    // 个人标签
+    // 类型标签（个人/官方）
+    var tw = x.measureText(nm).width;
+    var tagX = Math.min(PAD + tw + 10, W - PAD - 46);
     if (u[8]){
-      var tw = x.measureText(nm).width;
       x.fillStyle='#fce4ef';
-      var tagX = PAD + tw + 10;
-      roundRect(x, tagX, 24, 40, 20, 4); x.fill();
+      roundRect(x, tagX, 24, 42, 20, 4); x.fill();
       x.fillStyle='#c00060';
       x.font='bold 11px '+FF;
-      x.fillText('个人', tagX+8, 38);
+      x.fillText('个人', tagX+9, 38);
+    } else {
+      x.fillStyle='#eef2f6';
+      roundRect(x, tagX, 24, 42, 20, 4); x.fill();
+      x.fillStyle='#6b7f92';
+      x.font='bold 11px '+FF;
+      x.fillText('官方', tagX+9, 38);
     }
 
     x.fillStyle='#9aa0a6';
