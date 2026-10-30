@@ -19,8 +19,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 #app{height:100%;display:flex;flex-direction:column;max-width:720px;margin:0 auto;background:#fff}
 
 .search{flex:0 0 auto;padding:10px 12px 8px;background:#fff;display:flex;align-items:center}
-.search input{flex:1;width:100%;height:38px;padding:0 34px 0 12px;border:1px solid #dcdfe4;border-radius:8px;font-size:15px;outline:none;background:#f7f8fa;font-family:inherit;min-width:0;-webkit-appearance:none;appearance:none}
-.search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:20px;height:20px;margin-right:2px;cursor:pointer;background:transparent url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232c5f8e'><path d='M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'/></svg>") center/20px 20px no-repeat}
+.search-wrap{position:relative;flex:1;display:flex;align-items:center}
+.search input{flex:1;width:100%;height:38px;padding:0 40px 0 12px;border:1px solid #dcdfe4;border-radius:8px;font-size:15px;outline:none;background:#f7f8fa;font-family:inherit;min-width:0;-webkit-appearance:none;appearance:none}
+.search-x{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:26px;height:26px;display:none;align-items:center;justify-content:center;cursor:pointer;border-radius:50%}
+.search-x.on{display:flex}
+.search-x:active{background:#e8eef3}
+.search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
 .search input:focus{border-color:#2c5f8e;background:#fff}
 
 .sorts{flex:0 0 auto;padding:0 12px 8px;background:#fff;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
@@ -84,7 +88,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 <body>
 <div id="app">
   <div class="search">
-    <input id="q" type="search" placeholder="搜索昵称或用户ID" autocomplete="off" autocorrect="off" spellcheck="false">
+    <div class="search-wrap">
+      <input id="q" type="search" placeholder="搜索昵称或用户ID" autocomplete="off" autocorrect="off" spellcheck="false">
+      <span class="search-x" id="clr" aria-label="清除">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#2c5f8e" stroke-width="2.4" stroke-linecap="round"><path d="M6 6L18 18M18 6L6 18"/></svg>
+      </span>
+    </div>
   </div>
   <div class="sorts" id="sorts">
     <button data-sort="fan" class="on">粉丝</button>
@@ -130,6 +139,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   var winEl = document.getElementById('win');
   var barEl = document.getElementById('bar');
   var qEl = document.getElementById('q');
+  var clrEl = document.getElementById('clr');
   var maskEl = document.getElementById('mask');
   var mbodyEl = document.getElementById('mbody');
 
@@ -192,6 +202,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 
   function doSearch(){
     var kw = qEl.value.trim().toLowerCase();
+    if (clrEl) clrEl.className = kw ? 'search-x on' : 'search-x';
     var items;
     if (!kw){
       items = DATA.slice();
@@ -258,7 +269,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     var GRP_H = 40;
     var ROW_H2 = 50;
     var PAD = 20;
-    var H = HEADER_H + STATS_H + GRP_H + ROW_H2*nearRows.length + 56;
+    var H = HEADER_H + STATS_H + GRP_H + ROW_H2*nearRows.length;
 
     var dpr = 2;
     var cv = document.createElement('canvas');
@@ -281,22 +292,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     }
     x.fillText(nm, PAD, 44);
 
-    // 类型标签（个人/官方）
-    var tw = x.measureText(nm).width;
-    var tagX = Math.min(PAD + tw + 10, W - PAD - 46);
-    if (u[8]){
-      x.fillStyle='#fce4ef';
-      roundRect(x, tagX, 24, 42, 20, 4); x.fill();
-      x.fillStyle='#c00060';
-      x.font='bold 11px '+FF;
-      x.fillText('个人', tagX+9, 38);
-    } else {
-      x.fillStyle='#eef2f6';
-      roundRect(x, tagX, 24, 42, 20, 4); x.fill();
-      x.fillStyle='#6b7f92';
-      x.font='bold 11px '+FF;
-      x.fillText('官方', tagX+9, 38);
-    }
+    // 右上角半透明水印「化原」
+    x.textAlign='right';
+    x.fillStyle='rgba(44,95,142,0.10)';
+    x.font='bold 40px '+FF;
+    x.fillText('化原', W-PAD, 62);
+    x.textAlign='left';
 
     x.fillStyle='#9aa0a6';
     x.font='13px '+FF;
@@ -396,19 +397,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
       x.textAlign='left';
     }
 
-    // ===== 页脚 =====
-    var fy = ry + ROW_H2*nearRows.length;
-    var dt = new Date();
-    var ds = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
-    x.fillStyle='#fafbfc'; x.fillRect(0, fy, W, 56);
-    x.strokeStyle='#eeeeee'; x.lineWidth=1;
-    x.beginPath(); x.moveTo(0, fy+0.5); x.lineTo(W, fy+0.5); x.stroke();
-
-    x.fillStyle='#9aa0a6'; x.font='11px '+FF;
-    x.textAlign='center';
-    x.fillText('数据截止 '+ds+'  ·  来源：小黑盒公开主页  ·  按粉丝数降序', W/2, fy+32);
-    x.textAlign='left';
-
     cb(cv);
   }
 
@@ -461,6 +449,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   }
 
   qEl.addEventListener('input', doSearch);
+  if (clrEl) clrEl.addEventListener('click', function(){ qEl.value=''; doSearch(); qEl.focus(); });
 
   listEl.addEventListener('click', function(e){
     var row = e.target.closest('.row');
