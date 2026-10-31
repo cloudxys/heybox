@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>并发扩展测试</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:#f2f4f7;color:#1a1a1a;padding:16px;font-size:14px}
+h1{font-size:18px;margin-bottom:4px}
+.sub{font-size:12.5px;color:#7a8a99;margin-bottom:14px;line-height:1.7}
+.card{background:#fff;border-radius:12px;padding:13px;margin-bottom:9px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.src{font-size:13px;font-weight:600;color:#1f4e79;margin-bottom:7px}
+.row{display:flex;justify-content:space-between;padding:3px 0;font-size:12.5px}
+.k{color:#888}.v{font-weight:600;font-variant-numeric:tabular-nums}
+.big{font-size:21px;font-weight:700;color:#1f4e79}
+.stat{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600}
+.ok{background:#e6f7ee;color:#1a9c50}
+.bad{background:#fdecec;color:#d33}
+.wait{background:#f0f1f3;color:#888}
+button{width:100%;padding:12px;border:none;border-radius:10px;background:#2c5f8e;color:#fff;font-size:15px;font-family:inherit;cursor:pointer;margin-bottom:10px}
+button:disabled{opacity:.5}
+#log{font-size:10.5px;line-height:1.7;color:#666;white-space:pre-wrap;font-family:ui-monospace,monospace;max-height:180px;overflow-y:auto;background:#fafbfc;padding:9px;border-radius:8px}
+.hl{background:#fffbe6;border:1px solid #ffe58f}
+</style>
+</head>
+<body>
+<h1>并发扩展测试</h1>
+<div class="sub">只用 gcore + testingcf 两个快域名，每域名 6 个并发，看总速度能否翻倍。</div>
+
+<button id="run">开始测试（约 15 秒）</button>
+
+<div class="card hl">
+  <div class="src">总结果</div>
+  <div class="row"><span class="k">总数据量</span><span class="v big" id="t-size">-</span></div>
+  <div class="row"><span class="k">总耗时</span><span class="v big" id="t-time">-</span></div>
+  <div class="row"><span class="k">合并速度</span><span class="v big" id="t-speed">-</span></div>
+  <div class="row"><span class="k">6.5MB 预计</span><span class="v" id="t-eta">-</span></div>
+</div>
+
+<div id="list"></div>
+
+<div class="card">
+  <div class="src">日志</div>
+  <div id="log">等待…</div>
+</div>
+
+<script>
+/* 只用实测最快的两个域名 */
+var DOMAINS = [
+  { name: 'gcore.jsdelivr.net',     base: 'https://gcore.jsdelivr.net/gh/cloudxys/heybox@main/' },
+  { name: 'testingcf.jsdelivr.net', base: 'https://testingcf.jsdelivr.net/gh/cloudxys/heybox@main/' }
+];
+
+/* 12 块全用上，每个域名分 6 块 */
+var FILES = [];
+for (var i = 1; i <= 12; i++) FILES.push('e' + i + '.js');
+
+var logEl = document.getElementById('log');
+var listEl = document.getElementById('list');
+function log(s){ logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+function $(id){ return document.getElementById(id); }
+
+DOMAINS.forEach(function(d, i){
+  var el = document.createElement('div');
+  el.className = 'card';
+  el.innerHTML = '<div class="src">' + d.name + ' <span class="stat wait" id="st'+i+'">等待</span></div>'
+    + '<div class="row"><span class="k">并发块数</span><span class="v" id="c'+i+'">-</span></div>'
+    + '<div class="row"><span class="k">完成情况</span><span class="v" id="p'+i+'">-</span></div>'
+    + '<div class="row"><span class="k">速度</span><span class="v" id="s'+i+'">-</span></div>';
+  listEl.appendChild(el);
+});
+
+function dlOne(url){
+  var t0 = performance.now();
+  return fetch(url + '?t=' + Date.now(), {cache:'no-store'})
+    .then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var reader = r.body.getReader();
+      var total = 0;
+      return (function pump(){
+        return reader.read().then(function(x){
+          if (x.done) return {bytes: total, ms: performance.now() - t0};
+          total += x.value.length;
+          return pump();
+        });
+      })();
+    });
+}
+
+$('run').onclick = function(){
+  var btn = this; btn.disabled = true;
+  logEl.textContent = '';
+  ['t-size','t-time','t-speed','t-eta'].forEach(function(id){ $(id).textContent = '-'; });
+
+  /* 每个域名分 6 块 */
+  var buckets = DOMAINS.map(function(){ return []; });
+  FILES.forEach(function(f, i){ buckets[i % 2].push(f); });
+  buckets.forEach(function(b, i){
+    $('c'+i).textContent = b.length + ' 块';
+    $('p'+i).textContent = '0/' + b.length;
+    $('st'+i).className = 'stat wait';
+    $('st'+i).textContent = '等待';
+    log(DOMAINS[i].name + ': ' + b.join(' '));
+  });
+
+  var T0 = performance.now();
+  var bucketBytes = [0, 0];
+  var bucketDone = [0, 0];
+
+  var all = [];
+  buckets.forEach(function(bucket, di){
+    bucket.forEach(function(f){
+      var p = dlOne(DOMAINS[di].base + f)
+        .then(function(r){
+          bucketBytes[di] += r.bytes;
+          bucketDone[di]++;
+          $('p'+di).textContent = bucketDone[di] + '/' + bucket.length;
+          return r;
+        })
+        .catch(function(e){ bucketDone[di]++; return {bytes:0, err:e.message}; });
+      all.push(p);
+    });
+  });
+
+  /* 每 500ms 刷新一次实时速度 */
+  var iv = setInterval(function(){
+    var el = (performance.now() - T0)/1000;
+    var tot = bucketBytes[0] + bucketBytes[1];
+    if (el > 0.2) $('t-speed').textContent = (tot/1024/el).toFixed(0) + ' KB/s';
+    DOMAINS.forEach(function(d, i){
+      if (bucketBytes[i] > 0){
+        $('s'+i).textContent = (bucketBytes[i]/1024/el).toFixed(0) + ' KB/s';
+        $('st'+i).className = 'stat ok';
+        $('st'+i).textContent = '下载中';
+      }
+    });
+  }, 500);
+
+  Promise.all(all).then(function(results){
+    clearInterval(iv);
+    var el = performance.now() - T0;
+    var total = 0, errs = 0;
+    results.forEach(function(r){ total += r.bytes; if (r.err) errs++; });
+    var spd = total / (el/1000);
+
+    $('t-size').textContent = (total/1024/1024).toFixed(2) + ' MB';
+    $('t-time').textContent = (el/1000).toFixed(2) + ' 秒';
+    $('t-speed').textContent = (spd/1024).toFixed(0) + ' KB/s';
+
+    var full = 6.5*1024*1024 / spd;
+    $('t-eta').textContent = full.toFixed(1) + ' 秒';
+
+    DOMAINS.forEach(function(d, i){
+      $('s'+i).textContent = (bucketBytes[i]/1024/(el/1000)).toFixed(0) + ' KB/s';
+      $('st'+i).className = 'stat ' + (bucketBytes[i] ? 'ok' : 'bad');
+      $('st'+i).textContent = bucketBytes[i] ? '完成' : '失败';
+    });
+
+    log('');
+    log('总: ' + (total/1024/1024).toFixed(2) + 'MB / ' + (el/1000).toFixed(2) + 's = ' + (spd/1024).toFixed(0) + ' KB/s');
+    log('失败块: ' + errs);
+    log('6.5MB 预计: ' + full.toFixed(1) + ' 秒');
+    if (full <= 3) log('✅ 达到 3 秒！');
+    else if (full <= 5) log('⚠️ 接近，可接受');
+    else log('❌ 仍偏慢');
+    btn.disabled = false;
+  });
+};
+</script>
+</body>
+</html>
