@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>多源测速</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:#f2f4f7;color:#1a1a1a;padding:16px;font-size:14px}
+h1{font-size:19px;margin-bottom:4px}
+.sub{font-size:12.5px;color:#7a8a99;margin-bottom:16px;line-height:1.6}
+.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.src{font-size:13px;font-weight:600;color:#1f4e79;margin-bottom:8px}
+.row{display:flex;justify-content:space-between;padding:4px 0;font-size:12.5px}
+.k{color:#888}.v{font-weight:600;font-variant-numeric:tabular-nums}
+.stat{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600}
+.ok{background:#e6f7ee;color:#1a9c50}
+.bad{background:#fdecec;color:#d33}
+.wait{background:#f0f1f3;color:#888}
+button{width:100%;padding:13px;border:none;border-radius:10px;background:#2c5f8e;color:#fff;font-size:15px;font-family:inherit;cursor:pointer;margin-bottom:12px}
+button:disabled{opacity:.5}
+#log{font-size:11px;line-height:1.7;color:#666;white-space:pre-wrap;font-family:ui-monospace,monospace;max-height:200px;overflow-y:auto;background:#fafbfc;padding:10px;border-radius:8px}
+</style>
+</head>
+<body>
+<h1>多源测速</h1>
+<div class="sub">测试不同 CDN 能否访问以及速度。每个源下载约 590 KB 的文件。</div>
+
+<button id="run">开始测速</button>
+<div id="list"></div>
+
+<div class="card">
+  <div class="src">诊断日志</div>
+  <div id="log">等待开始…</div>
+</div>
+
+<script>
+/* 每个源测试一个约 590KB 的文件 */
+var SOURCES = [
+  { name: 'GitHub Pages',  url: 'https://cloudxys.github.io/heybox/e1.js', file: 'e1.js' },
+  { name: 'jsDelivr',      url: 'https://cdn.jsdelivr.net/gh/cloudxys/heybox@master/e1.js', file: 'e1.js' },
+  { name: 'jsDelivr-fastly', url: 'https://fastly.jsdelivr.net/gh/cloudxys/heybox@master/e1.js', file: 'e1.js' },
+  { name: 'jsDelivr-gcore', url: 'https://gcore.jsdelivr.net/gh/cloudxys/heybox@master/e1.js', file: 'e1.js' },
+  { name: 'Staticaly',     url: 'https://cdn.statically.io/gh/cloudxys/heybox/master/e1.js', file: 'e1.js' },
+  { name: 'GitHack',       url: 'https://raw.githack.com/cloudxys/heybox/master/e1.js', file: 'e1.js' },
+  { name: 'Cloudflare W',  url: 'https://heybox.cloudxys.workers.dev/e1.js', file: 'e1.js' }
+];
+
+var logEl = document.getElementById('log');
+var listEl = document.getElementById('list');
+function log(s){ logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+
+/* 建卡片 */
+SOURCES.forEach(function(s, i){
+  var d = document.createElement('div');
+  d.className = 'card';
+  d.id = 'card' + i;
+  d.innerHTML = '<div class="src">' + s.name + ' <span class="stat wait" id="st' + i + '">等待</span></div>'
+    + '<div class="row"><span class="k">速度</span><span class="v" id="sp' + i + '">-</span></div>'
+    + '<div class="row"><span class="k">耗时</span><span class="v" id="tm' + i + '">-</span></div>'
+    + '<div class="row"><span class="k">数据量</span><span class="v" id="sz' + i + '">-</span></div>';
+  listEl.appendChild(d);
+});
+
+function testOne(s, i){
+  return new Promise(function(resolve){
+    var t0 = performance.now();
+    var ctrl = new AbortController();
+    var to = setTimeout(function(){ ctrl.abort(); }, 30000);
+    document.getElementById('st' + i).className = 'stat wait';
+    document.getElementById('st' + i).textContent = '测试中';
+
+    fetch(s.url + '?t=' + Date.now(), { signal: ctrl.signal, cache: 'no-store' })
+      .then(function(r){
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var reader = r.body.getReader();
+        var total = 0;
+        return (function pump(){
+          return reader.read().then(function(x){
+            if (x.done) return total;
+            total += x.value.length;
+            return pump();
+          });
+        })();
+      })
+      .then(function(bytes){
+        clearTimeout(to);
+        var ms = performance.now() - t0;
+        var spd = bytes / (ms/1000);
+        document.getElementById('st' + i).className = 'stat ok';
+        document.getElementById('st' + i).textContent = '可用';
+        document.getElementById('sp' + i).textContent = (spd/1024).toFixed(0) + ' KB/s';
+        document.getElementById('tm' + i).textContent = (ms/1000).toFixed(2) + ' 秒';
+        document.getElementById('sz' + i).textContent = (bytes/1024).toFixed(0) + ' KB';
+        log('✅ ' + s.name + ': ' + (bytes/1024).toFixed(0) + 'KB / ' + (ms/1000).toFixed(2) + 's = ' + (spd/1024).toFixed(0) + ' KB/s');
+        resolve({name: s.name, spd: spd, ok: true});
+      })
+      .catch(function(e){
+        clearTimeout(to);
+        document.getElementById('st' + i).className = 'stat bad';
+        document.getElementById('st' + i).textContent = '失败';
+        document.getElementById('sp' + i).textContent = e.name === 'AbortError' ? '超时' : '失败';
+        log('❌ ' + s.name + ': ' + (e.name === 'AbortError' ? '超时 30s' : e.message));
+        resolve({name: s.name, spd: 0, ok: false});
+      });
+  });
+}
+
+document.getElementById('run').onclick = function(){
+  var btn = this; btn.disabled = true;
+  logEl.textContent = '';
+  log('开始测速（各源串行，避免互相干扰）…');
+  var results = [];
+  var chain = Promise.resolve();
+  SOURCES.forEach(function(s, i){
+    chain = chain.then(function(){
+      return testOne(s, i).then(function(r){ results.push(r); });
+    });
+  });
+  chain.then(function(){
+    log('');
+    log('===== 汇总 =====');
+    var ok = results.filter(function(r){ return r.ok; }).sort(function(a,b){ return b.spd - a.spd; });
+    if (!ok.length){ log('全部源都不可用'); }
+    else {
+      ok.forEach(function(r){
+        var sec = 6.5*1024 / (r.spd/1024);
+        var mark = sec <= 3 ? ' ✅' : (sec <= 10 ? ' ⚠️' : ' ❌');
+        log(r.name.padEnd(18) + (r.spd/1024).toFixed(0).padStart(6) + ' KB/s  → 全量需 ' + sec.toFixed(1) + 's' + mark);
+      });
+      log('');
+      log('推荐: ' + ok[0].name + '（最快）');
+    }
+    btn.disabled = false;
+  });
+};
+</script>
+</body>
+</html>
