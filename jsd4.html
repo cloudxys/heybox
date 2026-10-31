@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>jsDelivr 4域名并行测试</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:#f2f4f7;color:#1a1a1a;padding:16px;font-size:14px}
+h1{font-size:19px;margin-bottom:4px}
+.sub{font-size:12.5px;color:#7a8a99;margin-bottom:16px;line-height:1.7}
+.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.src{font-size:13.5px;font-weight:600;color:#1f4e79;margin-bottom:8px}
+.row{display:flex;justify-content:space-between;padding:4px 0;font-size:12.5px}
+.k{color:#888}.v{font-weight:600;font-variant-numeric:tabular-nums}
+.big{font-size:22px;font-weight:700;color:#1f4e79}
+.stat{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600}
+.ok{background:#e6f7ee;color:#1a9c50}
+.bad{background:#fdecec;color:#d33}
+.wait{background:#f0f1f3;color:#888}
+button{width:100%;padding:13px;border:none;border-radius:10px;background:#2c5f8e;color:#fff;font-size:15px;font-family:inherit;cursor:pointer;margin-bottom:12px}
+button:disabled{opacity:.5}
+#log{font-size:11px;line-height:1.75;color:#666;white-space:pre-wrap;font-family:ui-monospace,monospace;max-height:240px;overflow-y:auto;background:#fafbfc;padding:10px;border-radius:8px}
+.hl{background:#fffbe6;border:1px solid #ffe58f}
+</style>
+</head>
+<body>
+<h1>jsDelivr 4 域名并行</h1>
+<div class="sub">jsDelivr 有 4 个不同域名，各自独立连接。同时从 4 个域名下载不同数据块，看总速度能到多少。</div>
+
+<button id="run">开始测试（约 30-60 秒）</button>
+
+<div class="card hl">
+  <div class="src">总结果</div>
+  <div class="row"><span class="k">总数据量</span><span class="v big" id="tot-size">-</span></div>
+  <div class="row"><span class="k">总耗时</span><span class="v big" id="tot-time">-</span></div>
+  <div class="row"><span class="k">合并速度</span><span class="v big" id="tot-speed">-</span></div>
+  <div class="row"><span class="k">推算 6.5MB 全量</span><span class="v" id="tot-eta">-</span></div>
+</div>
+
+<div id="list"></div>
+
+<div class="card">
+  <div class="src">详细日志</div>
+  <div id="log">等待开始…</div>
+</div>
+
+<script>
+var DOMAINS = [
+  { name: 'cdn.jsdelivr.net',      base: 'https://cdn.jsdelivr.net/gh/cloudxys/heybox@main/' },
+  { name: 'fastly.jsdelivr.net',   base: 'https://fastly.jsdelivr.net/gh/cloudxys/heybox@main/' },
+  { name: 'gcore.jsdelivr.net',    base: 'https://gcore.jsdelivr.net/gh/cloudxys/heybox@main/' },
+  { name: 'testingcf.jsdelivr.net',base: 'https://testingcf.jsdelivr.net/gh/cloudxys/heybox@main/' }
+];
+
+/* 12 个数据块，轮流分配到 4 个域名 */
+var FILES = [];
+for (var i = 1; i <= 12; i++) FILES.push('e' + i + '.js');
+
+var logEl = document.getElementById('log');
+var listEl = document.getElementById('list');
+function log(s){ logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+function $(id){ return document.getElementById(id); }
+
+/* 建卡片 */
+DOMAINS.forEach(function(d, i){
+  var el = document.createElement('div');
+  el.className = 'card';
+  el.innerHTML = '<div class="src">' + d.name + ' <span class="stat wait" id="st'+i+'">等待</span></div>'
+    + '<div class="row"><span class="k">分到块数</span><span class="v" id="cnt'+i+'">-</span></div>'
+    + '<div class="row"><span class="k">下载速度</span><span class="v" id="sp'+i+'">-</span></div>'
+    + '<div class="row"><span class="k">数据量</span><span class="v" id="sz'+i+'">-</span></div>';
+  listEl.appendChild(el);
+});
+
+function dlOne(url){
+  var t0 = performance.now();
+  return fetch(url + '?t=' + Date.now(), {cache:'no-store'})
+    .then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var reader = r.body.getReader();
+      var total = 0;
+      return (function pump(){
+        return reader.read().then(function(x){
+          if (x.done) return {bytes: total, ms: performance.now() - t0};
+          total += x.value.length;
+          return pump();
+        });
+      })();
+    });
+}
+
+$('run').onclick = function(){
+  var btn = this; btn.disabled = true;
+  logEl.textContent = '';
+  ['tot-size','tot-time','tot-speed','tot-eta'].forEach(function(id){ $(id).textContent = '-'; });
+
+  /* 把 12 块轮流分配给 4 个域名 */
+  var buckets = DOMAINS.map(function(){ return []; });
+  FILES.forEach(function(f, i){ buckets[i % 4].push(f); });
+
+  buckets.forEach(function(b, i){
+    $('cnt'+i).textContent = b.length + ' 块';
+    $('st'+i).className = 'stat wait';
+    $('st'+i).textContent = '等待';
+  });
+
+  log('把 12 个块轮流分配到 4 个域名…');
+  buckets.forEach(function(b, i){ log('  ' + DOMAINS[i].name + ': ' + b.join(', ')); });
+  log('');
+
+  var t0 = performance.now();
+  log('同时开始下载…');
+
+  var prom = buckets.map(function(bucket, di){
+    return Promise.all(bucket.map(function(f){
+      return dlOne(DOMAINS[di].base + f)
+        .then(function(r){ return r; })
+        .catch(function(e){ return {bytes:0, ms:0, err:e.message}; });
+    })).then(function(rs){
+      var bytes = 0, errs = 0;
+      rs.forEach(function(r){ bytes += r.bytes; if (r.err) errs++; });
+      var el = performance.now() - t0;
+      var spd = bytes / (el/1000);
+      $('st'+di).className = 'stat ' + (errs === bucket.length ? 'bad' : 'ok');
+      $('st'+di).textContent = errs === bucket.length ? '失败' : (errs ? '部分失败' : '可用');
+      $('sp'+di).textContent = (spd/1024).toFixed(0) + ' KB/s';
+      $('sz'+di).textContent = (bytes/1024).toFixed(0) + ' KB';
+      log('  ' + DOMAINS[di].name + ': ' + (bytes/1024).toFixed(0) + 'KB, ' + (spd/1024).toFixed(0) + ' KB/s'
+          + (errs ? ' (' + errs + ' 块失败)' : ''));
+      return {domain: DOMAINS[di].name, bytes: bytes, spd: spd, errs: errs};
+    });
+  });
+
+  Promise.all(prom).then(function(results){
+    var totalBytes = 0;
+    results.forEach(function(r){ totalBytes += r.bytes; });
+    var el = performance.now() - t0;
+    var spd = totalBytes / (el/1000);
+
+    $('tot-size').textContent = (totalBytes/1024/1024).toFixed(2) + ' MB';
+    $('tot-time').textContent = (el/1000).toFixed(2) + ' 秒';
+    $('tot-speed').textContent = (spd/1024).toFixed(0) + ' KB/s';
+
+    var fullSec = 6.5*1024*1024 / spd;
+    $('tot-eta').textContent = fullSec.toFixed(1) + ' 秒';
+
+    log('');
+    log('===== 结果 =====');
+    log('4 域名并行总速度: ' + (spd/1024).toFixed(0) + ' KB/s');
+    log('下载 ' + (totalBytes/1024/1024).toFixed(2) + ' MB 用了 ' + (el/1000).toFixed(2) + ' 秒');
+    log('');
+    log('推算 6.5 MB 全量: ' + fullSec.toFixed(1) + ' 秒');
+    if (fullSec <= 3) log('✅ 达到 3 秒目标！');
+    else if (fullSec <= 8) log('⚠️ 接近目标，配合渐进加载可接受');
+    else log('❌ 仍不够，需要换国内源');
+  });
+};
+</script>
+</body>
+</html>
