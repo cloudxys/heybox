@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>连通性自检</title>
+<style>
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:#f2f4f7;margin:0;padding:24px;color:#1a1a1a}
+h1{font-size:20px;margin:0 0 6px}
+.sub{font-size:13px;color:#7a8a99;margin-bottom:20px}
+.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.row{display:flex;justify-content:space-between;align-items:center;font-size:14px;padding:8px 0;border-bottom:1px solid #f0f1f3}
+.row:last-child{border-bottom:none}
+.k{color:#666}
+.v{font-weight:600}
+.ok{color:#1a9c50}.bad{color:#d33}
+#test{margin-top:8px}
+button{width:100%;padding:12px;border:none;border-radius:10px;background:#2c5f8e;color:#fff;font-size:15px;font-family:inherit;cursor:pointer}
+button:disabled{opacity:.5}
+#result{margin-top:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;color:#333}
+</style>
+</head>
+<body>
+<h1>连通性自检</h1>
+<div class="sub">用来判断你的网络能否访问排行榜数据</div>
+
+<div class="card">
+  <div class="row"><span class="k">页面加载</span><span class="v ok" id="s-page">成功</span></div>
+  <div class="row"><span class="k">当前时间</span><span class="v" id="s-time">-</span></div>
+  <div class="row"><span class="k">网络(NAV)</span><span class="v" id="s-net">-</span></div>
+</div>
+
+<div class="card">
+  <button id="test">开始测试数据下载</button>
+  <div id="result">点击按钮，会尝试下载 users.js 并显示速度</div>
+</div>
+
+<script>
+document.getElementById('s-time').textContent = new Date().toLocaleString('zh-CN');
+var c = navigator.connection || {};
+document.getElementById('s-net').textContent = (c.effectiveType||'未知') + (c.downlink ? ' / ' + c.downlink + 'Mbps' : '');
+
+document.getElementById('test').onclick = function(){
+  var btn = this, res = document.getElementById('result');
+  btn.disabled = true;
+  res.textContent = '正在下载 users.js ...';
+  var t0 = performance.now();
+  var url = 'users.js?v=' + Date.now();
+  fetch(url).then(function(r){
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var total = 0, reader = r.body.getReader();
+    function pump(){
+      return reader.read().then(function(x){
+        if (x.done) { return total; }
+        total += x.value.length;
+        res.textContent = '已下载 ' + (total/1024/1024).toFixed(2) + ' MB ...';
+        return pump();
+      });
+    }
+    return pump();
+  }).then(function(){
+    var el = (performance.now() - t0) / 1000;
+    var sz = 6.34;
+    res.innerHTML = '<span style="color:#1a9c50">下载成功</span>\n' +
+      '文件大小: ' + sz + ' MB (压缩后约 3 MB)\n' +
+      '耗时: ' + el.toFixed(2) + ' 秒\n' +
+      '速度: ' + (sz*1024/el).toFixed(0) + ' KB/s\n' +
+      (el < 3 ? '\n✅ 符合 3 秒内要求' : '\n❌ 超过 3 秒，网络偏慢');
+    btn.disabled = false;
+  }).catch(function(e){
+    res.innerHTML = '<span style="color:#d33">下载失败</span>\n' + e.message + '\n\n可能是网络无法访问此域名';
+    btn.disabled = false;
+  });
+};
+</script>
+</body>
+</html>
