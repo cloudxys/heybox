@@ -55,6 +55,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 
 .empty{display:flex;align-items:center;justify-content:center;height:100%;color:#9aa0a6;font-size:14px}
 
+/* 加载遮罩 */
+#loading{position:fixed;inset:0;background:#f2f4f7;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .25s}
+#loading.hide{opacity:0;pointer-events:none}
+#loading .sp{width:34px;height:34px;border:3px solid #d8e0e8;border-top-color:#2c5f8e;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading .lt{margin-top:14px;font-size:13px;color:#7a8a99}
+#loading .lb{margin-top:6px;font-size:12px;color:#a8b4c0}
+#loading .err{margin-top:18px;font-size:13px;color:#c0392b;text-align:center;line-height:1.7;max-width:300px;display:none}
+#loading .err.on{display:block}
+#loading .retry{margin-top:16px;padding:8px 22px;border:1px solid #2c5f8e;background:#2c5f8e;color:#fff;border-radius:8px;font-size:13px;cursor:pointer;display:none;font-family:inherit}
+#loading .retry.on{display:block}
+
 .mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
 .mask.on{display:flex}
 .modal{background:#fff;border-radius:14px;width:100%;max-width:400px;max-height:86vh;overflow:hidden;display:flex;flex-direction:column;position:relative}
@@ -86,6 +98,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 </style>
 </head>
 <body>
+<div id="loading">
+  <div class="sp"></div>
+  <div class="lt">正在加载排行数据…</div>
+  <div class="lb" id="lbText">首次加载约 6 MB，请稍候</div>
+  <div class="err" id="errText"></div>
+  <button class="retry" id="retryBtn" onclick="location.reload()">重新加载</button>
+</div>
+
 <div id="app">
   <div class="search">
     <div class="search-wrap">
@@ -125,8 +145,61 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 
 <div id="cardWrap"></div>
 
-<script src="users.js?v=20261031"></script>
 <script>
+/* ---- 数据加载器：带进度、超时、失败提示 ---- */
+(function(){
+  var loadingEl = document.getElementById('loading');
+  var lbEl = document.getElementById('lbText');
+  var errEl = document.getElementById('errText');
+  var retryEl = document.getElementById('retryBtn');
+  var finished = false;
+
+  function fail(msg){
+    if (finished) return;
+    finished = true;
+    var sp = loadingEl.querySelector('.sp');
+    if (sp) sp.style.display = 'none';
+    loadingEl.querySelector('.lt').textContent = '加载失败';
+    lbEl.textContent = '';
+    errEl.textContent = msg;
+    errEl.classList.add('on');
+    retryEl.classList.add('on');
+  }
+
+  function done(){
+    if (finished) return;
+    finished = true;
+    loadingEl.classList.add('hide');
+    setTimeout(function(){ if (loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl); }, 300);
+  }
+
+  // 超时保护：60 秒还没加载完就提示
+  var timeoutId = setTimeout(function(){
+    fail('数据加载超时（超过 60 秒）。\n可能是网络较慢，请检查网络后重试。');
+  }, 60000);
+
+  var s = document.createElement('script');
+  s.src = 'users.js?v=20261031';
+  s.async = true;
+  s.onload = function(){
+    clearTimeout(timeoutId);
+    if (!window.__USERS__ || !window.__USERS__.length){
+      fail('数据文件返回为空。\n请稍后重试，或联系作者。');
+      return;
+    }
+    lbEl.textContent = '正在渲染 …';
+    window.__DSH_READY__ = true;
+    if (window.__DSH_INIT__) { window.__DSH_INIT__(); }
+  };
+  s.onerror = function(){
+    clearTimeout(timeoutId);
+    fail('数据文件（users.js）加载失败。\n可能是网络中断，或 CDN 暂时不可用。\n请点击下方按钮重试。');
+  };
+  document.head.appendChild(s);
+})();
+</script>
+<script>
+window.__DSH_INIT__ = function(){
 (function(){
   var DATA = window.__USERS__ || [];
   var ROW_H = 76;
@@ -468,6 +541,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 
   doSearch();
 })();
+};
+/* 如果 data 已在页面加载前就绪（缓存命中），立即初始化 */
+if (window.__USERS__ && window.__USERS__.length) { window.__DSH_INIT__(); }
 </script>
 </body>
 </html>
