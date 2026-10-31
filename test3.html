@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>小黑盒粉丝排行榜</title>
+<!-- Microsoft Clarity -->
+<script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "z68ybg3ogi");
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;position:fixed;width:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:#f2f4f7;color:#1a1a1a;font-size:14px}
+#app{height:100%;display:flex;flex-direction:column;max-width:720px;margin:0 auto;background:#fff}
+
+.search{flex:0 0 auto;padding:10px 12px 8px;background:#fff;display:flex;align-items:center}
+.search-wrap{position:relative;flex:1;display:flex;align-items:center}
+.search input{flex:1;width:100%;height:38px;padding:0 40px 0 12px;border:1px solid #dcdfe4;border-radius:8px;font-size:15px;outline:none;background:#f7f8fa;font-family:inherit;min-width:0;-webkit-appearance:none;appearance:none}
+.search-x{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:26px;height:26px;display:none;align-items:center;justify-content:center;cursor:pointer;border-radius:50%}
+.search-x.on{display:flex}
+.search-x:active{background:#e8eef3}
+.search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
+.search input:focus{border-color:#2c5f8e;background:#fff}
+
+.sorts{flex:0 0 auto;padding:0 12px 8px;background:#fff;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.sorts::-webkit-scrollbar{display:none}
+.sorts button{flex:0 0 auto;border:1px solid #dcdfe4;background:#fff;color:#666;font-size:12.5px;padding:5px 13px;border-radius:15px;cursor:pointer;font-family:inherit;line-height:1.4;white-space:nowrap;transition:all .15s}
+.sorts button.on{background:#2c5f8e;border-color:#2c5f8e;color:#fff;font-weight:500}
+
+.bar{flex:0 0 auto;padding:6px 14px;font-size:12px;color:#888;background:#fafbfc;border-top:1px solid #f0f1f3;border-bottom:1px solid #e8eaed}
+.bar b{color:#2c5f8e}
+
+.list{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;position:relative}
+.spacer{position:relative;width:100%}
+.win{position:absolute;left:0;right:0;top:0;will-change:transform}
+
+.row{height:76px;display:flex;align-items:center;padding:0 12px;border-bottom:1px solid #f0f1f3;cursor:pointer;gap:10px}
+.row:active{background:#f0f5fa}
+.rk{flex:0 0 auto;width:42px;text-align:center;font-weight:700;font-size:13px;color:#9aa0a6;font-variant-numeric:tabular-nums}
+.row.top1 .rk{color:#c07a00}
+.row.top2 .rk,.row.top3 .rk{color:#8a7000}
+.row.pin .rk{color:#c00060}
+.mid{flex:1 1 auto;min-width:0}
+.nm{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+.stats{font-size:11.5px;color:#9aa0a6;margin-top:3px;display:flex;gap:9px;white-space:nowrap;overflow:hidden}
+.stats span{flex:0 0 auto}
+.tag{display:inline-block;padding:0 5px;border-radius:3px;font-size:10.5px;line-height:14px;font-weight:500;background:#fce4ef;color:#c00060}
+.fan{flex:0 0 auto;text-align:right;font-weight:600;font-size:14px;color:#2c5f8e;font-variant-numeric:tabular-nums;min-width:66px}
+.fan span{display:block;font-size:11px;font-weight:400;color:#9aa0a6}
+
+.empty{display:flex;align-items:center;justify-content:center;height:100%;color:#9aa0a6;font-size:14px}
+
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+.mask.on{display:flex}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:400px;max-height:86vh;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.mh{padding:14px 16px;border-bottom:1px solid #eee;position:relative;padding-right:44px}
+.mclose{position:absolute;right:10px;top:10px;width:28px;height:28px;border:none;background:#f2f4f7;border-radius:50%;font-size:15px;color:#888;cursor:pointer;line-height:1}
+.muser .nm{font-size:17px;font-weight:600;line-height:1.3;word-break:break-all;white-space:normal}
+.muser .uid{font-size:12px;color:#9aa0a6;margin-top:3px}
+.ms{display:flex;border-top:1px solid #f0f1f3;border-bottom:1px solid #f0f1f3}
+.ms div{flex:1;text-align:center;padding:8px 0;border-right:1px solid #f0f1f3}
+.ms div:last-child{border-right:none}
+.ms .v{font-size:15px;font-weight:700;color:#2c5f8e;font-variant-numeric:tabular-nums}
+.ms .k{font-size:10.5px;color:#9aa0a6;margin-top:1px}
+.mb{overflow-y:auto;flex:1}
+.grp{padding:7px 16px 5px;font-size:11px;color:#9aa0a6;background:#fafbfc;font-weight:500;position:sticky;top:0;z-index:1}
+.mrow{display:flex;align-items:center;padding:7px 16px;gap:8px;cursor:pointer;border-bottom:1px solid #f7f8fa;height:46px}
+.mrow:active{background:#f0f5fa}
+.mrow.self{background:#fff9e6;border-left:3px solid #f0b400;padding-left:13px}
+.mrow .rk{width:38px;font-size:12px}
+.mrow .nm{font-size:13px;font-weight:400}
+.mrow .fan{font-size:12px;min-width:60px}
+.mfoot{flex:0 0 auto;padding:10px 16px;border-top:1px solid #f0f1f3;display:flex;gap:10px}
+.btn{flex:1;height:38px;border:none;border-radius:9px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px}
+.btn-primary{background:#2c5f8e;color:#fff}
+.btn-primary:active{background:#244c72}
+.btn-ghost{background:#f2f4f7;color:#555}
+
+/* 保存卡片（离屏渲染，不显示保存按钮） */
+#cardWrap{position:fixed;left:-9999px;top:0;z-index:-1}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="search">
+    <div class="search-wrap">
+      <input id="q" type="search" placeholder="搜索昵称或用户ID" autocomplete="off" autocorrect="off" spellcheck="false">
+      <span class="search-x" id="clr" aria-label="清除">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#2c5f8e" stroke-width="2.4" stroke-linecap="round"><path d="M6 6L18 18M18 6L6 18"/></svg>
+      </span>
+    </div>
+  </div>
+  <div class="sorts" id="sorts">
+    <button data-sort="fan" class="on">粉丝</button>
+    <button data-sort="award">点赞收藏</button>
+    <button data-sort="level">等级</button>
+    <button data-sort="id">ID</button>
+    <button data-sort="post">发帖</button>
+    <button data-sort="follow">关注</button>
+  </div>
+  <div class="bar" id="bar"></div>
+  <div class="list" id="list">
+    <div class="spacer" id="spacer"><div class="win" id="win"></div></div>
+  </div>
+</div>
+
+<div class="mask" id="mask">
+  <div class="modal">
+    <div class="mh">
+      <button class="mclose" id="mclose">✕</button>
+      <div class="muser" id="muser"></div>
+    </div>
+    <div class="ms" id="mstats"></div>
+    <div class="mb" id="mbody"></div>
+    <div class="mfoot">
+      <button class="btn btn-primary" id="saveBtn">保存卡片</button>
+    </div>
+  </div>
+</div>
+
+<div id="cardWrap"></div>
+
+<script>
+(function(){
+  var DATA = window.__USERS__ || [];
+  window.__DSH_RELOAD__ = function(){
+    DATA = window.__USERS__ || [];
+    doSearch();
+  };
+  var ROW_H = 76;
+  var OVERSCAN = 12;
+  var sortMode = 'fan';
+  var curUser = null;
+
+  var listEl = document.getElementById('list');
+  var spacerEl = document.getElementById('spacer');
+  var winEl = document.getElementById('win');
+  var barEl = document.getElementById('bar');
+  var qEl = document.getElementById('q');
+  var clrEl = document.getElementById('clr');
+  var maskEl = document.getElementById('mask');
+  var mbodyEl = document.getElementById('mbody');
+
+  var view = [];
+  var renderedFrom = -1, renderedTo = -1;
+
+  function fmt(n){ return (n||0).toLocaleString('en-US'); }
+  function esc(s){ return String(s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+  var SORT_LABEL = {fan:'粉丝', post:'发帖', follow:'关注', award:'点赞收藏', level:'等级', id:'ID'};
+  var SORT_IDX = {fan:3, post:5, follow:4, award:7, level:6, id:1};
+
+  function applySort(arr){
+    var key = SORT_IDX[sortMode];
+    return arr.sort(function(a,b){
+      if (sortMode === 'id'){
+        var x = parseInt(a[1],10), y = parseInt(b[1],10);
+        return x !== y ? x - y : a[0] - b[0];
+      }
+      if (a[key] !== b[key]) return b[key] - a[key];
+      if (a[3] !== b[3]) return b[3] - a[3];
+      return a[0] - b[0];
+    });
+  }
+
+  function rowHTML(u){
+    var cls = 'row';
+    if (u[0]===1) cls+=' top1';
+    else if (u[0]<=3) cls+=' top2';
+    else if (u[0]<=10) cls+=' top3';
+    if (u[8]) cls+=' pin';
+    var tg = u[8] ? '<span class="tag">个人</span>' : '';
+    return '<div class="'+cls+'" data-i="'+u[0]+'">'
+      + '<div class="rk">'+u[0]+'</div>'
+      + '<div class="mid"><div class="nm">'+tg+esc(u[2])+'</div>'
+      + '<div class="stats"><span>发帖 '+fmt(u[5])+'</span><span>关注 '+fmt(u[4])+'</span><span>点赞收藏 '+fmt(u[7])+'</span></div></div>'
+      + '<div class="fan">'+fmt(u[3])+'<span>粉丝</span></div></div>';
+  }
+
+  function paint(force){
+    if (!view.length){ winEl.innerHTML=''; renderedFrom=renderedTo=-1; return; }
+    var st = listEl.scrollTop, h = listEl.clientHeight;
+    var start = Math.max(0, Math.floor(st/ROW_H) - OVERSCAN);
+    var end = Math.min(view.length, Math.ceil((st+h)/ROW_H) + OVERSCAN);
+    if (!force && start===renderedFrom && end===renderedTo) return;
+    renderedFrom=start; renderedTo=end;
+    winEl.style.transform = 'translateY(' + (start*ROW_H) + 'px)';
+    var parts=[];
+    for (var i=start;i<end;i++) parts.push(rowHTML(view[i]));
+    winEl.innerHTML = parts.join('');
+  }
+
+  function setView(items){
+    view = items;
+    spacerEl.style.height = (items.length*ROW_H) + 'px';
+    listEl.scrollTop = 0;
+    renderedFrom = renderedTo = -1;
+    if (items.length) paint(true); else winEl.innerHTML='';
+  }
+
+  function doSearch(){
+    var kw = qEl.value.trim().toLowerCase();
+    if (clrEl) clrEl.className = kw ? 'search-x on' : 'search-x';
+    var items;
+    if (!kw){
+      items = DATA.slice();
+      items = applySort(items);
+      barEl.innerHTML = '共 <b>' + fmt(DATA.length) + '</b> 个账号 · 按' + SORT_LABEL[sortMode] + '排序';
+    } else {
+      items = [];
+      for (var i=0;i<DATA.length;i++){
+        var u = DATA[i];
+        if (u[2].toLowerCase().indexOf(kw) > -1 || u[1].indexOf(kw) > -1) items.push(u);
+      }
+      items = applySort(items);
+      barEl.innerHTML = '匹配 <b>' + fmt(items.length) + '</b> 个账号 · 按' + SORT_LABEL[sortMode] + '排序';
+    }
+    setView(items);
+  }
+
+  function openDetail(u){
+    curUser = u;
+    document.getElementById('muser').innerHTML =
+      '<div class="nm">'+esc(u[2])+(u[8]?' <span class="tag" style="font-size:11px">个人</span>':'')+'</div>'
+      + '<div class="uid">ID: '+esc(u[1])+'</div>';
+
+    document.getElementById('mstats').innerHTML =
+      '<div><div class="v">#'+u[0]+'</div><div class="k">排名</div></div>'
+      + '<div><div class="v">'+fmt(u[3])+'</div><div class="k">粉丝</div></div>'
+      + '<div><div class="v">'+fmt(u[4])+'</div><div class="k">关注</div></div>'
+      + '<div><div class="v">'+fmt(u[5])+'</div><div class="k">发帖</div></div>'
+      + '<div><div class="v">'+fmt(u[7])+'</div><div class="k">点赞收藏</div></div>'
+      + '<div><div class="v">Lv.'+u[6]+'</div><div class="k">等级</div></div>';
+
+    var idx = u[0]-1;
+    var from = Math.max(0, idx-10), to = Math.min(DATA.length, idx+11);
+    var html = '<div class="grp">排名相近</div>';
+    for (var i=from;i<to;i++){
+      var x = DATA[i], isSelf = (x[0]===u[0]);
+      html += '<div class="mrow'+(isSelf?' self':'')+'" data-i="'+x[0]+'">'
+        + '<div class="rk">'+x[0]+'</div>'
+        + '<div class="mid"><div class="nm">'+esc(x[2])+'</div></div>'
+        + '<div class="fan">'+fmt(x[3])+'</div></div>';
+    }
+    mbodyEl.innerHTML = html;
+    maskEl.classList.add('on');
+    mbodyEl.scrollTop = 0;
+    setTimeout(function(){
+      var selfEl = mbodyEl.querySelector('.mrow.self');
+      if (selfEl){
+        var t = selfEl.offsetTop - mbodyEl.clientHeight/2 + selfEl.offsetHeight/2;
+        mbodyEl.scrollTop = Math.max(0, t);
+      }
+    }, 20);
+  }
+
+  /* ===== 生成卡片图片（复刻详情弹窗） ===== */
+  function buildCard(u, cb){
+    var idx = u[0]-1;
+    var from = Math.max(0, idx-10), to = Math.min(DATA.length, idx+11);
+    var nearRows = [];
+    for (var i=from;i<to;i++) nearRows.push(DATA[i]);
+
+    var W = 600;
+    var HEADER_H = 116;
+    var STATS_H = 92;
+    var GRP_H = 40;
+    var ROW_H2 = 50;
+    var PAD = 20;
+    var H = HEADER_H + STATS_H + GRP_H + ROW_H2*nearRows.length;
+
+    var dpr = 2;
+    var cv = document.createElement('canvas');
+    cv.width = W*dpr; cv.height = H*dpr;
+    var x = cv.getContext('2d');
+    x.scale(dpr, dpr);
+
+    // 白底
+    x.fillStyle='#ffffff'; x.fillRect(0,0,W,H);
+
+    var FF = '-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+
+    // ===== 头部 =====
+    x.textAlign='left'; x.textBaseline='alphabetic';
+    x.fillStyle='#1a1a1a';
+    var nm = u[2], fsz = 26;
+    x.font = 'bold '+fsz+'px '+FF;
+    while (x.measureText(nm).width > W-PAD*2 && fsz > 15){
+      fsz -= 1; x.font = 'bold '+fsz+'px '+FF;
+    }
+    x.fillText(nm, PAD, 44);
+
+    // 右上角半透明水印「化原」
+    x.textAlign='right';
+    x.fillStyle='rgba(44,95,142,0.03)';
+    x.font='bold 12px '+FF;
+    x.fillText('化原', W-PAD, 42);
+    x.textAlign='left';
+
+    x.fillStyle='#9aa0a6';
+    x.font='13px '+FF;
+    x.fillText('ID: '+u[1], PAD, 72);
+
+    // 分隔线
+    x.strokeStyle='#eeeeee'; x.lineWidth=1;
+    x.beginPath(); x.moveTo(0, HEADER_H-0.5); x.lineTo(W, HEADER_H-0.5); x.stroke();
+
+    // ===== 数据区（6 格）=====
+    var stats = [
+      ['#'+u[0], '排名'],
+      [fmt(u[3]), '粉丝'],
+      [fmt(u[4]), '关注'],
+      [fmt(u[5]), '发帖'],
+      [fmt(u[7]), '点赞收藏'],
+      ['Lv.'+u[6], '等级']
+    ];
+    var cellW = (W-0)/6;
+    var sy = HEADER_H;
+
+    // 上下边框
+    x.strokeStyle='#f0f1f3'; x.lineWidth=1;
+    x.beginPath(); x.moveTo(0, sy+0.5); x.lineTo(W, sy+0.5); x.stroke();
+    x.beginPath(); x.moveTo(0, sy+STATS_H-0.5); x.lineTo(W, sy+STATS_H-0.5); x.stroke();
+
+    for (var i=0;i<stats.length;i++){
+      var cx = i*cellW;
+      // 竖分隔线
+      if (i>0){
+        x.strokeStyle='#f0f1f3';
+        x.beginPath(); x.moveTo(cx+0.5, sy); x.lineTo(cx+0.5, sy+STATS_H); x.stroke();
+      }
+      x.textAlign='center';
+      x.fillStyle='#2c5f8e';
+      var vf = 20;
+      x.font='bold '+vf+'px '+FF;
+      var vt = stats[i][0];
+      while (x.measureText(vt).width > cellW-10 && vf > 10){
+        vf -= 1; x.font='bold '+vf+'px '+FF;
+      }
+      x.fillText(vt, cx+cellW/2, sy+42);
+      x.fillStyle='#9aa0a6';
+      x.font='11px '+FF;
+      x.fillText(stats[i][1], cx+cellW/2, sy+66);
+    }
+    x.textAlign='left';
+
+    // ===== 排名相近 =====
+    var gy = HEADER_H + STATS_H;
+    x.fillStyle='#fafbfc'; x.fillRect(0, gy, W, GRP_H);
+    x.fillStyle='#9aa0a6'; x.font='12px '+FF;
+    x.textBaseline='middle';
+    x.fillText('排名相近', PAD, gy+GRP_H/2);
+    x.textBaseline='alphabetic';
+
+    var ry = gy + GRP_H;
+    for (var j=0;j<nearRows.length;j++){
+      var r = nearRows[j];
+      var isSelf = (r[0] === u[0]);
+      var rowY = ry + j*ROW_H2;
+
+      if (isSelf){
+        x.fillStyle='#fff9e6'; x.fillRect(0, rowY, W, ROW_H2);
+        x.fillStyle='#f0b400'; x.fillRect(0, rowY, 3, ROW_H2);
+      }
+      // 底部细线
+      x.strokeStyle = j===nearRows.length-1 ? '#f0f1f3' : '#f7f8fa';
+      x.lineWidth=1;
+      x.beginPath(); x.moveTo(0, rowY+ROW_H2-0.5); x.lineTo(W, rowY+ROW_H2-0.5); x.stroke();
+
+      var textY = rowY + ROW_H2/2 + 5;
+
+      // 排名
+      x.fillStyle = isSelf ? '#c07a00' : '#9aa0a6';
+      x.font='bold 12px '+FF;
+      x.textAlign='center';
+      x.fillText(String(r[0]), PAD+16, textY);
+      x.textAlign='left';
+
+      // 昵称
+      x.fillStyle='#1a1a1a';
+      x.font=(isSelf?'bold ':'')+'14px '+FF;
+      var rn = r[2];
+      var maxW = W - PAD*2 - 32 - 100;
+      while (x.measureText(rn).width > maxW && rn.length > 1){
+        rn = rn.slice(0,-1);
+      }
+      if (rn !== r[2]) rn = rn.slice(0,-1)+'…';
+      x.fillText(rn, PAD+46, textY);
+
+      // 粉丝数
+      x.fillStyle='#2c5f8e';
+      x.font=(isSelf?'bold ':'')+'13px '+FF;
+      x.textAlign='right';
+      x.fillText(fmt(r[3]), W-PAD, textY);
+      x.textAlign='left';
+    }
+
+    cb(cv);
+  }
+
+  function format(n){ return (n||0).toLocaleString('en-US'); }
+
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+    ctx.closePath();
+  }
+
+  function saveCard(){
+    if (!curUser) return;
+    var btn = document.getElementById('saveBtn');
+    var old = btn.textContent;
+    btn.textContent = '生成中…'; btn.disabled = true;
+
+    buildCard(curUser, function(cv){
+      cv.toBlob(function(blob){
+        var name = curUser[2].replace(/[\\/:*?"<>|]/g,'_');
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = '小黑盒_第'+curUser[0]+'名_'+name+'.png';
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+        btn.disabled = false; btn.textContent = old;
+      }, 'image/png');
+    });
+  }
+
+  // 事件
+  listEl.addEventListener('scroll', function(){ paint(false); }, { passive:true });
+  window.addEventListener('resize', function(){ paint(true); });
+
+  var sortBtns = document.querySelectorAll('#sorts button');
+  for (var si=0; si<sortBtns.length; si++){
+    (function(btn){
+      btn.addEventListener('click', function(){
+        for (var k=0;k<sortBtns.length;k++) sortBtns[k].className='';
+        btn.className='on';
+        sortMode = btn.getAttribute('data-sort');
+        doSearch();
+      });
+    })(sortBtns[si]);
+  }
+
+  qEl.addEventListener('input', doSearch);
+  if (clrEl) clrEl.addEventListener('click', function(){ qEl.value=''; doSearch(); qEl.focus(); });
+
+  listEl.addEventListener('click', function(e){
+    var row = e.target.closest('.row');
+    if (!row) return;
+    openDetail(DATA[parseInt(row.getAttribute('data-i'),10)-1]);
+  });
+  mbodyEl.addEventListener('click', function(e){
+    var row = e.target.closest('.mrow');
+    if (!row) return;
+    openDetail(DATA[parseInt(row.getAttribute('data-i'),10)-1]);
+  });
+  document.getElementById('mclose').addEventListener('click', function(){ maskEl.classList.remove('on'); });
+  maskEl.addEventListener('click', function(e){ if (e.target===maskEl) maskEl.classList.remove('on'); });
+  document.addEventListener('keydown', function(e){ if (e.key==='Escape') maskEl.classList.remove('on'); });
+  document.getElementById('saveBtn').addEventListener('click', saveCard);
+
+  doSearch();
+})();
+</script>
+
+<div id="__bar" style="position:fixed;left:0;right:0;bottom:0;z-index:99999;padding:9px 12px;
+font-size:12.5px;color:#fff;text-align:center;background:#2c5f8e;font-family:-apple-system,sans-serif;
+box-shadow:0 -2px 10px rgba(0,0,0,.18);line-height:1.6">准备中…</div>
+
+<script>
+(function(){
+  var T0 = performance.now();
+  var bar = document.getElementById('__bar');
+  var META = [{"i": 1, "file": "e1.js", "bytes": 602387}, {"i": 2, "file": "e2.js", "bytes": 591162}, {"i": 3, "file": "e3.js", "bytes": 572401}, {"i": 4, "file": "e4.js", "bytes": 567474}, {"i": 5, "file": "e5.js", "bytes": 562105}, {"i": 6, "file": "e6.js", "bytes": 557686}, {"i": 7, "file": "e7.js", "bytes": 548550}, {"i": 8, "file": "e8.js", "bytes": 537896}, {"i": 9, "file": "e9.js", "bytes": 529477}, {"i": 10, "file": "e10.js", "bytes": 530100}, {"i": 11, "file": "e11.js", "bytes": 525859}, {"i": 12, "file": "e12.js", "bytes": 520732}];
+  var TOTAL = 130255;
+  var parts = new Array(META.length);
+  var doneCount = 0, failCount = 0;
+  var finished = false;
+
+  function say(t, c){ if(bar){ bar.textContent = t; if(c) bar.style.background = c; } }
+  function hide(){ if(!bar) return; bar.style.transition='opacity .6s'; bar.style.opacity='0';
+                   setTimeout(function(){ if(bar) bar.remove(); }, 700); }
+
+  function merge(){
+    var all = [];
+    for (var i=0;i<parts.length;i++){ if (parts[i]) all = all.concat(parts[i]); }
+    all.sort(function(a,b){ return a[0]-b[0]; });
+    window.__USERS__ = all;
+    if (window.__DSH_RELOAD__) window.__DSH_RELOAD__();
+    return all.length;
+  }
+
+  function finish(){
+    if (finished) return;
+    finished = true;
+    var el = (performance.now()-T0)/1000;
+    var n = window.__USERS__ ? window.__USERS__.length : 0;
+    if (n >= TOTAL*0.95){
+      say('✅ 全部 ' + n.toLocaleString() + ' 条已加载 · 总耗时 ' + el.toFixed(2) + ' 秒', '#1a9c50');
+    } else {
+      say('⚠️ ' + n.toLocaleString() + '/' + TOTAL.toLocaleString() + ' 条 · '
+          + failCount + ' 块失败 · ' + el.toFixed(2) + ' 秒', '#d97706');
+    }
+    setTimeout(hide, 4500);
+  }
+
+  /* 真并行：所有块同时 fetch，谁先到谁先合并渲染 */
+  var t_start = performance.now();
+  META.forEach(function(meta, idx){
+    var t = performance.now();
+    fetch(meta.file + '?v=' + Date.now(), { cache: 'force-cache' })
+      .then(function(r){
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(arr){
+        var el = (performance.now()-t)/1000;
+        if (arr && arr.length){
+          parts[idx] = arr;
+          doneCount++;
+          var n = merge();
+          say('并行加载 ' + doneCount + '/' + META.length + ' 块 · '
+              + n.toLocaleString() + ' 条 · 本块 ' + el.toFixed(2) + 's');
+          if (doneCount + failCount >= META.length) finish();
+        } else {
+          failCount++;
+          if (doneCount + failCount >= META.length) finish();
+        }
+      })
+      .catch(function(err){
+        failCount++;
+        say('第 ' + (idx+1) + ' 块失败：' + err.message + '（' + failCount + '/' + META.length + '）', '#d97706');
+        if (doneCount + failCount >= META.length) finish();
+      });
+  });
+})();
+</script>
+</body>
+</html>
