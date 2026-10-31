@@ -10,7 +10,7 @@
         c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
         t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
         y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-    })(window, document, "clarity", "script", "z5a0szp3nj");
+    })(window, document, "clarity", "script", "z68ybg3ogi");
 </script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -125,10 +125,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 
 <div id="cardWrap"></div>
 
-<script src="users.js?v=20261031"></script>
 <script>
 (function(){
   var DATA = window.__USERS__ || [];
+  window.__DSH_RELOAD__ = function(){
+    DATA = window.__USERS__ || [];
+    doSearch();
+  };
   var ROW_H = 76;
   var OVERSCAN = 12;
   var sortMode = 'fan';
@@ -467,6 +470,101 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   document.getElementById('saveBtn').addEventListener('click', saveCard);
 
   doSearch();
+})();
+</script>
+
+<div id="__ld" style="position:fixed;inset:0;background:#f2f4f7;z-index:99998;display:flex;
+flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,sans-serif">
+  <div style="width:36px;height:36px;border:3px solid #d8e0e8;border-top-color:#2c5f8e;border-radius:50%;
+       animation:__sp .8s linear infinite"></div>
+  <div style="margin-top:14px;font-size:13px;color:#7a8a99" id="__ldt">正在加载排行数据…</div>
+  <div style="margin-top:6px;font-size:12px;color:#a8b4c0" id="__ldp">0 / 12</div>
+  <style>@keyframes __sp{to{transform:rotate(360deg)}}</style>
+</div>
+
+<script>
+(function(){
+  var T0 = performance.now();
+  var ldEl = document.getElementById('__ld');
+  var ldT = document.getElementById('__ldt');
+  var ldP = document.getElementById('__ldp');
+
+  /* 双域名并行：实测 gcore ~973 KB/s, testingcf ~963 KB/s */
+  var BASES = [
+    'https://gcore.jsdelivr.net/gh/cloudxys/heybox@main/',
+    'https://testingcf.jsdelivr.net/gh/cloudxys/heybox@main/'
+  ];
+  var N = 12;
+  var parts = new Array(N);
+  var done = 0, fail = 0;
+  var finished = false;
+
+  function hideLoader(){
+    if (!ldEl) return;
+    ldEl.style.transition = 'opacity .25s';
+    ldEl.style.opacity = '0';
+    setTimeout(function(){ if (ldEl && ldEl.parentNode) ldEl.parentNode.removeChild(ldEl); }, 300);
+  }
+
+  function merge(){
+    var all = [];
+    for (var i = 0; i < N; i++){
+      if (parts[i]) all = all.concat(parts[i]);
+    }
+    all.sort(function(a,b){ return a[0] - b[0]; });
+    window.__USERS__ = all;
+    if (window.__DSH_RELOAD__) window.__DSH_RELOAD__();
+    return all.length;
+  }
+
+  function finish(){
+    if (finished) return;
+    finished = true;
+    var el = (performance.now() - T0) / 1000;
+    var n = window.__USERS__ ? window.__USERS__.length : 0;
+    if (n >= 120000){
+      hideLoader();
+    } else {
+      ldT.innerHTML = '⚠️ 加载了 ' + n.toLocaleString() + ' / 130,255 条<br>'
+        + '<span style="font-size:12px;color:#d97706">部分数据加载失败，可刷新重试</span>';
+      ldP.textContent = fail + ' 块失败';
+      setTimeout(hideLoader, 2500);
+    }
+  }
+
+  /* 12 块轮流分配到 2 个域名 → 每域名 6 并发 */
+  function loadChunk(idx){
+    var base = BASES[idx % 2];
+    var url = base + 'e' + (idx + 1) + '.js';
+    fetch(url, { cache: 'force-cache' })
+      .then(function(r){
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(arr){
+        if (arr && arr.length){
+          parts[idx] = arr;
+          done++;
+          ldP.textContent = done + ' / ' + N;
+          var n = merge();
+          if (done + fail >= N) finish();
+        } else {
+          fail++;
+          if (done + fail >= N) finish();
+        }
+      })
+      .catch(function(){
+        fail++;
+        if (done + fail >= N) finish();
+      });
+  }
+
+  for (var i = 0; i < N; i++) loadChunk(i);
+
+  /* 兜底：8 秒还没加载完，先隐藏遮罩让用户能用已到的部分 */
+  setTimeout(function(){
+    if (!finished && done > 0) hideLoader();
+  }, 8000);
 })();
 </script>
 </body>
