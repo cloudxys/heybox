@@ -224,18 +224,38 @@ function applySort(arr){
     });
   }
 
-  function rowHTML(u){
+  /* 当前分类下该行应显示的数值与单位 */
+  function curVal(u){
+    var m = sortMode;
+    if (m==='fan')    return [fmt(u[3]), '粉丝'];
+    if (m==='award')  return [fmt(u[7]), '点赞收藏'];
+    if (m==='level')  return ['Lv.'+u[6], '等级'];
+    if (m==='post')   return [fmt(u[5]), '发帖'];
+    if (m==='follow') return [fmt(u[4]), '关注'];
+    return [u[1], 'ID'];
+  }
+
+  function rowHTML(u, displayRank){
+    var rk = displayRank || u[0];
     var cls = 'row';
-    if (u[0]===1) cls+=' top1';
-    else if (u[0]<=3) cls+=' top2';
-    else if (u[0]<=10) cls+=' top3';
+    if (rk===1) cls+=' top1';
+    else if (rk<=3) cls+=' top2';
+    else if (rk<=10) cls+=' top3';
     if (u[8]) cls+=' pin';
     var tg = u[8] ? '<span class="tag">个人</span>' : '';
-    return '<div class="'+cls+'" data-i="'+u[0]+'">'
-      + '<div class="rk">'+u[0]+'</div>'
+    var cv = curVal(u);
+    // 副信息：当前分类之外的两项
+    var sub = [];
+    if (sortMode!=='fan')    sub.push('粉丝 '+fmt(u[3]));
+    if (sortMode!=='award')  sub.push('点赞收藏 '+fmt(u[7]));
+    if (sortMode!=='post')   sub.push('发帖 '+fmt(u[5]));
+    if (sortMode!=='follow') sub.push('关注 '+fmt(u[4]));
+    var subHtml = sub.slice(0,3).map(function(s){ return '<span>'+s+'</span>'; }).join('');
+    return '<div class="'+cls+'" data-i="'+u[0]+'" data-uid="'+esc(u[1])+'">'
+      + '<div class="rk">'+rk+'</div>'
       + '<div class="mid"><div class="nm">'+tg+esc(u[2])+'</div>'
-      + '<div class="stats"><span>发帖 '+fmt(u[5])+'</span><span>关注 '+fmt(u[4])+'</span><span>点赞收藏 '+fmt(u[7])+'</span></div></div>'
-      + '<div class="fan">'+fmt(u[3])+'<span>粉丝</span></div></div>';
+      + '<div class="stats">'+subHtml+'</div></div>'
+      + '<div class="fan">'+cv[0]+'<span>'+cv[1]+'</span></div></div>';
   }
 
   function paint(force){
@@ -247,7 +267,7 @@ function applySort(arr){
     renderedFrom=start; renderedTo=end;
     winEl.style.transform = 'translateY(' + (start*ROW_H) + 'px)';
     var parts=[];
-    for (var i=start;i<end;i++) parts.push(rowHTML(view[i]));
+    for (var i=start;i<end;i++) parts.push(rowHTML(view[i], i+1));
     winEl.innerHTML = parts.join('');
   }
 
@@ -290,15 +310,27 @@ function applySort(arr){
       '<div class="nm">'+esc(u[2])+(PERSONAL_IDS.has(u[1])?' <span class="tag" style="font-size:11px">个人</span>':'')+'</div>'
       + '<div class="uid">ID: '+esc(u[1])+'</div>';
 
-    // 6 格：当前分类排名 + 5 项数据
-    var cells = [
-      ['#'+rk, modeName+'排名', true],
-      [fmt(u[3]), '粉丝', mode==='fan'],
-      [fmt(u[4]), '关注', mode==='follow'],
-      [fmt(u[5]), '发帖', mode==='post'],
-      [fmt(u[7]), '点赞收藏', mode==='award'],
-      ['Lv.'+u[6], '等级', mode==='level']
-    ];
+    /* 6 格布局：[当前分类排名] [当前分类的值] [其余 4 项]
+       —— 当前分类永远排在最左边（排名后面第一位） */
+    var ALL = {
+      fan:    [fmt(u[3]), '粉丝'],
+      award:  [fmt(u[7]), '点赞收藏'],
+      level:  ['Lv.'+u[6], '等级'],
+      post:   [fmt(u[5]), '发帖'],
+      follow: [fmt(u[4]), '关注'],
+      id:     [String(u[1]), 'ID']
+    };
+    var cells = [['#'+rk, modeName+'排名', true]];
+    // 第二位：当前分类的值（高亮）
+    cells.push([ALL[mode][0], ALL[mode][1], true]);
+    // 其余分类，按固定顺序补齐到 6 格
+    var order = ['fan','award','post','follow','level','id'];
+    for (var oi=0; oi<order.length; oi++){
+      var k = order[oi];
+      if (k === mode) continue;
+      cells.push([ALL[k][0], ALL[k][1], false]);
+      if (cells.length >= 6) break;
+    }
     var html = '';
     for (var i=0;i<cells.length;i++){
       var c = cells[i];
@@ -426,14 +458,35 @@ function applySort(arr){
     x.beginPath(); x.moveTo(0, Y0+HEADER_H-0.5); x.lineTo(W, Y0+HEADER_H-0.5); x.stroke();
 
     // ===== 数据区 =====
-    var stats = [
-      ['#'+rk, modeName+'排名'],
-      [fmt(u[3]), '粉丝'],
-      [fmt(u[4]), '关注'],
-      [fmt(u[5]), '发帖'],
-      [fmt(u[7]), '点赞收藏'],
-      ['Lv.'+u[6], '等级']
-    ];
+    // 分类卡片：第 1 格 = 当前分类排名，其余按分类顺序
+    // 总排名卡片：6 格全部显示【各分类的排名】（不显示粉丝名次首格）
+    var CLASS_ORDER = ['fan','award','post','follow','level','id'];
+    var CLASS_NAME = { fan:'粉丝', award:'点赞收藏', post:'发帖', follow:'关注', level:'等级', id:'ID' };
+    var CLASS_VAL = {
+      fan:    fmt(u[3]),
+      award:  fmt(u[7]),
+      post:   fmt(u[5]),
+      follow: fmt(u[4]),
+      level:  'Lv.'+u[6],
+      id:     String(u[1])
+    };
+    var stats;
+    if (mode === 'all'){
+      // 总排名卡片：六格 = 六个分类各自的排名
+      stats = CLASS_ORDER.map(function(k){
+        return ['#'+rankIn(k, u), CLASS_NAME[k] + '排名'];
+      });
+    } else {
+      // 分类卡片：首格 = 当前分类排名，第二格 = 当前分类的值，其余补齐
+      stats = [['#'+rk, modeName+'排名']];
+      stats.push([CLASS_VAL[useMode], CLASS_NAME[useMode]]);
+      for (var oi=0; oi<CLASS_ORDER.length; oi++){
+        var k = CLASS_ORDER[oi];
+        if (k === useMode) continue;
+        stats.push([CLASS_VAL[k], CLASS_NAME[k]]);
+        if (stats.length >= 6) break;
+      }
+    }
     var cellW = W/6;
     var sy = Y0 + HEADER_H;
 
@@ -609,6 +662,10 @@ function applySort(arr){
   }
   window.__refreshRanks = refreshRanks;
   window.__getUser = findUser;
+  window.__buildCardTest = function(mode, cb){
+    buildCard(curUser, mode, cb);
+  };
+  window.__setCurUser = function(u){ curUser = u; };
   refreshRanks();
 
   doSearch();
