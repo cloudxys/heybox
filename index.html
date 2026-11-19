@@ -57,6 +57,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 
 .mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
 .mask.on{display:flex}
+.mfoot{display:flex;gap:8px;padding:10px 12px;border-top:1px solid #f0f1f3;background:#fff}
+.mfoot .btn{flex:1;margin:0;font-size:13.5px;padding:10px 8px}
+.btn-secondary{background:#f7f8fa;color:#2c5f8e;border:1px solid #d8e0e8}
+.btn-secondary:active{background:#eef2f6}
+#mstats .hi{background:#eef6f9;border-radius:6px}
 .modal{background:#fff;border-radius:14px;width:100%;max-width:400px;max-height:86vh;overflow:hidden;display:flex;flex-direction:column;position:relative}
 .mh{padding:14px 16px;border-bottom:1px solid #eee;position:relative;padding-right:44px}
 .mclose{position:absolute;right:10px;top:10px;width:28px;height:28px;border:none;background:#f2f4f7;border-radius:50%;font-size:15px;color:#888;cursor:pointer;line-height:1}
@@ -118,7 +123,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     <div class="ms" id="mstats"></div>
     <div class="mb" id="mbody"></div>
     <div class="mfoot">
-      <button class="btn btn-primary" id="saveBtn">保存卡片</button>
+      <button class="btn btn-primary" id="saveBtn">保存当前分类卡片</button>
+      <button class="btn btn-secondary" id="saveAllBtn">保存总排名卡片</button>
     </div>
   </div>
 </div>
@@ -130,6 +136,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   var DATA = window.__USERS__ || [];
   window.__DSH_RELOAD__ = function(){
     DATA = window.__USERS__ || [];
+    if (window.__refreshRanks) window.__refreshRanks();
+    if (window.__computeRanks) window.__computeRanks();
+    if (typeof computeAllRanks === 'function' && RANK_MAPS && Object.keys(RANK_MAPS).length === 0){
+      RANK_MAPS = computeAllRanks();
+      window.RANK_MAPS = RANK_MAPS;
+    }
     doSearch();
   };
   var ROW_H = 76;
@@ -147,15 +159,59 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   var mbodyEl = document.getElementById('mbody');
 
   var view = [];
+  var RANK_MAPS = {};
   var renderedFrom = -1, renderedTo = -1;
 
   function fmt(n){ return (n||0).toLocaleString('en-US'); }
   function esc(s){ return String(s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
+  var PERSONAL_IDS = new Set(["49088477", "64644201", "49613475", "65804232", "51971468", "22532586", "11874855", "19441452", "13388391", "15648281", "16022755", "9706054", "21228789", "56044871", "20810215", "14881317", "35015673", "56394847", "66835706", "13522750", "50113288", "9830519", "4464434", "13228840", "24571235", "32254552", "14422992", "22880628", "35755731", "12833243", "22738225", "57764648", "18139768"]);
   var SORT_LABEL = {fan:'粉丝', post:'发帖', follow:'关注', award:'点赞收藏', level:'等级', id:'ID'};
   var SORT_IDX = {fan:3, post:5, follow:4, award:7, level:6, id:1};
 
-  function applySort(arr){
+  
+  /* ===== 多维度排名：为每条数据预计算各分类位次 =====
+     字段索引: 0=粉丝排名 1=发帖排名 2=关注排名 3=点赞收藏排名 4=等级排名 5=ID排名
+     rk[u][0..5] 存位次；u[9] 存原粉丝排名 */
+  var RANK_KEYS = [
+    { key: 'fan',    idx: 3, dir: -1 },
+    { key: 'post',   idx: 5, dir: -1 },
+    { key: 'follow', idx: 4, dir: -1 },
+    { key: 'award',  idx: 7, dir: -1 },
+    { key: 'level',  idx: 6, dir: -1 },
+    { key: 'id',     idx: 1, dir:  1 }
+  ];
+  var RANK_OF = { fan:0, post:1, follow:2, award:3, level:4, id:5 };
+
+  function computeAllRanks(){
+    // rankMap[key] = { uid: rank }
+    var maps = {};
+    RANK_KEYS.forEach(function(k){
+      var arr = DATA.slice();
+      if (k.key === 'id'){
+        arr.sort(function(a,b){
+          var x = parseInt(a[1],10), y = parseInt(b[1],10);
+          return x !== y ? x - y : a[0] - b[0];
+        });
+      } else {
+        arr.sort(function(a,b){
+          if (a[k.idx] !== b[k.idx]) return b[k.idx] - a[k.idx];
+          return a[0] - b[0];
+        });
+      }
+      var m = {};
+      for (var i = 0; i < arr.length; i++) m[arr[i][1]] = i + 1;
+      maps[k.key] = m;
+    });
+    return maps;
+  }
+
+  function rankIn(mode, u){
+    var m = RANK_MAPS[mode];
+    return m ? (m[u[1]] || 0) : 0;
+  }
+
+function applySort(arr){
     var key = SORT_IDX[sortMode];
     return arr.sort(function(a,b){
       if (sortMode === 'id'){
@@ -225,29 +281,58 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 
   function openDetail(u){
     curUser = u;
+    var mode = sortMode;
+    var rk = rankIn(mode, u);
+    var total = DATA.length;
+    var modeName = SORT_LABEL[mode];
+
     document.getElementById('muser').innerHTML =
-      '<div class="nm">'+esc(u[2])+(u[8]?' <span class="tag" style="font-size:11px">个人</span>':'')+'</div>'
+      '<div class="nm">'+esc(u[2])+(PERSONAL_IDS.has(u[1])?' <span class="tag" style="font-size:11px">个人</span>':'')+'</div>'
       + '<div class="uid">ID: '+esc(u[1])+'</div>';
 
-    document.getElementById('mstats').innerHTML =
-      '<div><div class="v">#'+u[0]+'</div><div class="k">排名</div></div>'
-      + '<div><div class="v">'+fmt(u[3])+'</div><div class="k">粉丝</div></div>'
-      + '<div><div class="v">'+fmt(u[4])+'</div><div class="k">关注</div></div>'
-      + '<div><div class="v">'+fmt(u[5])+'</div><div class="k">发帖</div></div>'
-      + '<div><div class="v">'+fmt(u[7])+'</div><div class="k">点赞收藏</div></div>'
-      + '<div><div class="v">Lv.'+u[6]+'</div><div class="k">等级</div></div>';
-
-    var idx = u[0]-1;
-    var from = Math.max(0, idx-10), to = Math.min(DATA.length, idx+11);
-    var html = '<div class="grp">排名相近</div>';
-    for (var i=from;i<to;i++){
-      var x = DATA[i], isSelf = (x[0]===u[0]);
-      html += '<div class="mrow'+(isSelf?' self':'')+'" data-i="'+x[0]+'">'
-        + '<div class="rk">'+x[0]+'</div>'
-        + '<div class="mid"><div class="nm">'+esc(x[2])+'</div></div>'
-        + '<div class="fan">'+fmt(x[3])+'</div></div>';
+    // 6 格：当前分类排名 + 5 项数据
+    var cells = [
+      ['#'+rk, modeName+'排名', true],
+      [fmt(u[3]), '粉丝', mode==='fan'],
+      [fmt(u[4]), '关注', mode==='follow'],
+      [fmt(u[5]), '发帖', mode==='post'],
+      [fmt(u[7]), '点赞收藏', mode==='award'],
+      ['Lv.'+u[6], '等级', mode==='level']
+    ];
+    var html = '';
+    for (var i=0;i<cells.length;i++){
+      var c = cells[i];
+      html += '<div'+(c[2]?' class="hi"':'')+'><div class="v">'+c[0]+'</div><div class="k">'+c[1]+'</div></div>';
     }
-    mbodyEl.innerHTML = html;
+    document.getElementById('mstats').innerHTML = html;
+
+    // 排名相近：按当前分类排序后取前后 10
+    var sorted = DATA.slice();
+    var rkKey = RANK_KEYS[RANK_OF[mode]];
+    if (mode === 'id'){
+      sorted.sort(function(a,b){
+        var x = parseInt(a[1],10), y = parseInt(b[1],10);
+        return x !== y ? x - y : a[0] - b[0];
+      });
+    } else {
+      sorted.sort(function(a,b){
+        if (a[rkKey.idx] !== b[rkKey.idx]) return b[rkKey.idx] - a[rkKey.idx];
+        return a[0] - b[0];
+      });
+    }
+    var myIdx = rk - 1;
+    var from = Math.max(0, myIdx-10), to = Math.min(sorted.length, myIdx+11);
+    var h2 = '<div class="grp">'+modeName+'排名相近（#'+rk+' / '+fmt(total)+'）</div>';
+    for (var j=from;j<to;j++){
+      var x = sorted[j], isSelf = (x[1]===u[1]);
+      var xrk = j+1;
+      var val = mode==='fan' ? fmt(x[3]) : (mode==='award'? fmt(x[7]) : (mode==='post'? fmt(x[5]) : (mode==='follow'? fmt(x[4]) : (mode==='level'? 'Lv.'+x[6] : x[1]))));
+      h2 += '<div class="mrow'+(isSelf?' self':'')+'" data-uid="'+esc(x[1])+'">'
+        + '<div class="rk">'+xrk+'</div>'
+        + '<div class="mid"><div class="nm">'+esc(x[2])+'</div></div>'
+        + '<div class="fan">'+val+'</div></div>';
+    }
+    mbodyEl.innerHTML = h2;
     maskEl.classList.add('on');
     mbodyEl.scrollTop = 0;
     setTimeout(function(){
@@ -259,20 +344,43 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     }, 20);
   }
 
-  /* ===== 生成卡片图片（复刻详情弹窗） ===== */
-  function buildCard(u, cb){
-    var idx = u[0]-1;
-    var from = Math.max(0, idx-10), to = Math.min(DATA.length, idx+11);
+/* ===== 生成卡片图片 =====
+    mode: 'cat' = 当前分类排名卡片；'all' = 总排名（粉丝）卡片
+*/
+  function buildCard(u, mode, cb){
+    if (!mode) mode = 'cat';
+    var useMode = (mode === 'all') ? 'fan' : sortMode;
+    var rk = rankIn(useMode, u);
+    var total = DATA.length;
+    var modeName = SORT_LABEL[useMode];
+
+    // 当前分类的排序列表
+    var sorted = DATA.slice();
+    var rkKey = RANK_KEYS[RANK_OF[useMode]];
+    if (useMode === 'id'){
+      sorted.sort(function(a,b){
+        var x = parseInt(a[1],10), y = parseInt(b[1],10);
+        return x !== y ? x - y : a[0] - b[0];
+      });
+    } else {
+      sorted.sort(function(a,b){
+        if (a[rkKey.idx] !== b[rkKey.idx]) return b[rkKey.idx] - a[rkKey.idx];
+        return a[0] - b[0];
+      });
+    }
+    var myIdx = rk - 1;
+    var from = Math.max(0, myIdx-10), to = Math.min(sorted.length, myIdx+11);
     var nearRows = [];
-    for (var i=from;i<to;i++) nearRows.push(DATA[i]);
+    for (var i=from;i<to;i++) nearRows.push({ d: sorted[i], r: i+1 });
 
     var W = 600;
+    var TITLE_H = 46;
     var HEADER_H = 116;
     var STATS_H = 92;
     var GRP_H = 40;
     var ROW_H2 = 50;
     var PAD = 20;
-    var H = HEADER_H + STATS_H + GRP_H + ROW_H2*nearRows.length;
+    var H = TITLE_H + HEADER_H + STATS_H + GRP_H + ROW_H2*nearRows.length + 14;
 
     var dpr = 2;
     var cv = document.createElement('canvas');
@@ -280,123 +388,134 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     var x = cv.getContext('2d');
     x.scale(dpr, dpr);
 
-    // 白底
     x.fillStyle='#ffffff'; x.fillRect(0,0,W,H);
-
     var FF = '-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
 
+    // ===== 顶部色带：区分两种卡片 =====
+    var bandColor = (mode === 'all') ? '#2c5f8e' : '#1a7f5a';
+    x.fillStyle = bandColor;
+    x.fillRect(0, 0, W, TITLE_H);
+    x.fillStyle = '#ffffff';
+    x.font = 'bold 15px ' + FF;
+    x.textAlign = 'center';
+    x.fillText(modeName + '排行榜', W/2, 30);
+    x.textAlign = 'left';
+
+    var Y0 = TITLE_H;
+
     // ===== 头部 =====
-    x.textAlign='left'; x.textBaseline='alphabetic';
     x.fillStyle='#1a1a1a';
     var nm = u[2], fsz = 26;
     x.font = 'bold '+fsz+'px '+FF;
     while (x.measureText(nm).width > W-PAD*2 && fsz > 15){
       fsz -= 1; x.font = 'bold '+fsz+'px '+FF;
     }
-    x.fillText(nm, PAD, 44);
+    x.fillText(nm, PAD, Y0+44);
 
-    // 右上角半透明水印「化原」
     x.textAlign='right';
-    x.fillStyle='rgba(44,95,142,0.03)';
+    x.fillStyle='rgba(44,95,142,0.05)';
     x.font='bold 12px '+FF;
-    x.fillText('化原', W-PAD, 42);
+    x.fillText('化原', W-PAD, Y0+42);
     x.textAlign='left';
 
     x.fillStyle='#9aa0a6';
     x.font='13px '+FF;
-    x.fillText('ID: '+u[1], PAD, 72);
+    x.fillText('ID: '+u[1], PAD, Y0+72);
 
-    // 分隔线
     x.strokeStyle='#eeeeee'; x.lineWidth=1;
-    x.beginPath(); x.moveTo(0, HEADER_H-0.5); x.lineTo(W, HEADER_H-0.5); x.stroke();
+    x.beginPath(); x.moveTo(0, Y0+HEADER_H-0.5); x.lineTo(W, Y0+HEADER_H-0.5); x.stroke();
 
-    // ===== 数据区（6 格）=====
+    // ===== 数据区 =====
     var stats = [
-      ['#'+u[0], '排名'],
+      ['#'+rk, modeName+'排名'],
       [fmt(u[3]), '粉丝'],
       [fmt(u[4]), '关注'],
       [fmt(u[5]), '发帖'],
       [fmt(u[7]), '点赞收藏'],
       ['Lv.'+u[6], '等级']
     ];
-    var cellW = (W-0)/6;
-    var sy = HEADER_H;
+    var cellW = W/6;
+    var sy = Y0 + HEADER_H;
 
-    // 上下边框
     x.strokeStyle='#f0f1f3'; x.lineWidth=1;
     x.beginPath(); x.moveTo(0, sy+0.5); x.lineTo(W, sy+0.5); x.stroke();
     x.beginPath(); x.moveTo(0, sy+STATS_H-0.5); x.lineTo(W, sy+STATS_H-0.5); x.stroke();
 
     for (var i=0;i<stats.length;i++){
-      var cx = i*cellW;
-      // 竖分隔线
+      var cxx = i*cellW;
       if (i>0){
         x.strokeStyle='#f0f1f3';
-        x.beginPath(); x.moveTo(cx+0.5, sy); x.lineTo(cx+0.5, sy+STATS_H); x.stroke();
+        x.beginPath(); x.moveTo(cxx+0.5, sy); x.lineTo(cxx+0.5, sy+STATS_H); x.stroke();
       }
       x.textAlign='center';
-      x.fillStyle='#2c5f8e';
+      x.fillStyle = (i===0) ? bandColor : '#2c5f8e';
       var vf = 20;
       x.font='bold '+vf+'px '+FF;
       var vt = stats[i][0];
       while (x.measureText(vt).width > cellW-10 && vf > 10){
         vf -= 1; x.font='bold '+vf+'px '+FF;
       }
-      x.fillText(vt, cx+cellW/2, sy+42);
+      x.fillText(vt, cxx+cellW/2, sy+42);
       x.fillStyle='#9aa0a6';
       x.font='11px '+FF;
-      x.fillText(stats[i][1], cx+cellW/2, sy+66);
+      x.fillText(stats[i][1], cxx+cellW/2, sy+66);
     }
     x.textAlign='left';
 
     // ===== 排名相近 =====
-    var gy = HEADER_H + STATS_H;
+    var gy = sy + STATS_H;
     x.fillStyle='#fafbfc'; x.fillRect(0, gy, W, GRP_H);
     x.fillStyle='#9aa0a6'; x.font='12px '+FF;
     x.textBaseline='middle';
-    x.fillText('排名相近', PAD, gy+GRP_H/2);
+    var grpLabel = modeName + '排名相近（共 ' + fmt(total) + ' 个账号）';
+    x.fillText(grpLabel, PAD, gy+GRP_H/2);
     x.textBaseline='alphabetic';
 
     var ry = gy + GRP_H;
     for (var j=0;j<nearRows.length;j++){
-      var r = nearRows[j];
-      var isSelf = (r[0] === u[0]);
+      var item = nearRows[j];
+      var r = item.d;
+      var isSelf = (r[1] === u[1]);
       var rowY = ry + j*ROW_H2;
 
       if (isSelf){
         x.fillStyle='#fff9e6'; x.fillRect(0, rowY, W, ROW_H2);
         x.fillStyle='#f0b400'; x.fillRect(0, rowY, 3, ROW_H2);
       }
-      // 底部细线
       x.strokeStyle = j===nearRows.length-1 ? '#f0f1f3' : '#f7f8fa';
       x.lineWidth=1;
       x.beginPath(); x.moveTo(0, rowY+ROW_H2-0.5); x.lineTo(W, rowY+ROW_H2-0.5); x.stroke();
 
       var textY = rowY + ROW_H2/2 + 5;
 
-      // 排名
       x.fillStyle = isSelf ? '#c07a00' : '#9aa0a6';
       x.font='bold 12px '+FF;
       x.textAlign='center';
-      x.fillText(String(r[0]), PAD+16, textY);
+      x.fillText(String(item.r), PAD+16, textY);
       x.textAlign='left';
 
-      // 昵称
       x.fillStyle='#1a1a1a';
       x.font=(isSelf?'bold ':'')+'14px '+FF;
       var rn = r[2];
-      var maxW = W - PAD*2 - 32 - 100;
+      var maxW = W - PAD*2 - 32 - 110;
       while (x.measureText(rn).width > maxW && rn.length > 1){
         rn = rn.slice(0,-1);
       }
       if (rn !== r[2]) rn = rn.slice(0,-1)+'…';
       x.fillText(rn, PAD+46, textY);
 
-      // 粉丝数
-      x.fillStyle='#2c5f8e';
+      // 右侧显示当前分类对应的数值
+      var showVal;
+      if (useMode === 'fan') showVal = fmt(r[3]);
+      else if (useMode === 'post') showVal = fmt(r[5]);
+      else if (useMode === 'follow') showVal = fmt(r[4]);
+      else if (useMode === 'award') showVal = fmt(r[7]);
+      else if (useMode === 'level') showVal = 'Lv.'+r[6];
+      else showVal = r[1];
+      x.fillStyle= bandColor;
       x.font=(isSelf?'bold ':'')+'13px '+FF;
       x.textAlign='right';
-      x.fillText(fmt(r[3]), W-PAD, textY);
+      x.fillText(showVal, W-PAD, textY);
       x.textAlign='left';
     }
 
@@ -415,18 +534,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     ctx.closePath();
   }
 
-  function saveCard(){
+  function saveCard(mode){
     if (!curUser) return;
-    var btn = document.getElementById('saveBtn');
+    if (!mode) mode = 'cat';
+    var btn = document.getElementById(mode==='all' ? 'saveAllBtn' : 'saveBtn');
     var old = btn.textContent;
     btn.textContent = '生成中…'; btn.disabled = true;
 
-    buildCard(curUser, function(cv){
+    buildCard(curUser, mode, function(cv){
       cv.toBlob(function(blob){
-        var name = curUser[2].replace(/[\\/:*?"<>|]/g,'_');
+        var name = curUser[2].replace(/[\/:*?"<>|]/g,'_');
+        var label = (mode==='all') ? '总排名' : (SORT_LABEL[sortMode] + '排名');
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
-        a.href = url; a.download = '小黑盒_第'+curUser[0]+'名_'+name+'.png';
+        a.href = url; a.download = '小黑盒_'+label+'_'+name+'.png';
         document.body.appendChild(a); a.click();
         document.body.removeChild(a);
         setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
@@ -434,6 +555,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
       }, 'image/png');
     });
   }
+
 
   // 事件
   listEl.addEventListener('scroll', function(){ paint(false); }, { passive:true });
@@ -454,20 +576,40 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   qEl.addEventListener('input', doSearch);
   if (clrEl) clrEl.addEventListener('click', function(){ qEl.value=''; doSearch(); qEl.focus(); });
 
+  function findUser(uid){
+    for (var i=0;i<DATA.length;i++){ if (DATA[i][1] === uid) return DATA[i]; }
+    return null;
+  }
+
   listEl.addEventListener('click', function(e){
     var row = e.target.closest('.row');
     if (!row) return;
-    openDetail(DATA[parseInt(row.getAttribute('data-i'),10)-1]);
+    var uid = row.getAttribute('data-uid');
+    var u = uid ? findUser(uid) : DATA[parseInt(row.getAttribute('data-i'),10)-1];
+    if (u) openDetail(u);
   });
   mbodyEl.addEventListener('click', function(e){
     var row = e.target.closest('.mrow');
     if (!row) return;
-    openDetail(DATA[parseInt(row.getAttribute('data-i'),10)-1]);
+    var uid = row.getAttribute('data-uid');
+    var u = uid ? findUser(uid) : null;
+    if (u) openDetail(u);
   });
   document.getElementById('mclose').addEventListener('click', function(){ maskEl.classList.remove('on'); });
   maskEl.addEventListener('click', function(e){ if (e.target===maskEl) maskEl.classList.remove('on'); });
   document.addEventListener('keydown', function(e){ if (e.key==='Escape') maskEl.classList.remove('on'); });
-  document.getElementById('saveBtn').addEventListener('click', saveCard);
+  document.getElementById('saveBtn').addEventListener('click', function(){ saveCard('cat'); });
+  var sab = document.getElementById('saveAllBtn');
+  if (sab) sab.addEventListener('click', function(){ saveCard('all'); });
+
+  /* 数据就绪后计算各分类排名（数据由加载器异步填充，这里若为空则等 __DSH_RELOAD__ 回调） */
+  function refreshRanks(){
+    RANK_MAPS = computeAllRanks();
+    window.RANK_MAPS = RANK_MAPS;
+  }
+  window.__refreshRanks = refreshRanks;
+  window.__getUser = findUser;
+  refreshRanks();
 
   doSearch();
 })();
@@ -491,8 +633,8 @@ flex-direction:column;align-items:center;justify-content:center;font-family:-app
 
   /* 双域名并行：实测 gcore ~973 KB/s, testingcf ~963 KB/s */
   var BASES = [
-    'https://gcore.jsdelivr.net/gh/cloudxys/heybox@ba90fe622db3/',
-    'https://testingcf.jsdelivr.net/gh/cloudxys/heybox@ba90fe622db3/'
+    'https://gcore.jsdelivr.net/gh/cloudxys/heybox@55de7236204b/',
+    'https://testingcf.jsdelivr.net/gh/cloudxys/heybox@55de7236204b/'
   ];
   var N = 12;
   var parts = new Array(N);
