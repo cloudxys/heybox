@@ -320,7 +320,7 @@ function applySort(arr){
       follow: [fmt(u[4]), '关注'],
       id:     [String(u[1]), 'ID']
     };
-    var cells = [['#'+rk, modeName+'排名', true]];
+    var cells = [[String(rk), modeName+'排名', true]];
     // 第二位：当前分类的值（高亮）
     cells.push([ALL[mode][0], ALL[mode][1], true]);
     // 其余分类，按固定顺序补齐到 6 格
@@ -474,11 +474,11 @@ function applySort(arr){
     if (mode === 'all'){
       // 总排名卡片：六格 = 六个分类各自的排名
       stats = CLASS_ORDER.map(function(k){
-        return ['#'+rankIn(k, u), CLASS_NAME[k] + '排名'];
+        return [String(rankIn(k, u)), CLASS_NAME[k] + '排名'];
       });
     } else {
       // 分类卡片：首格 = 当前分类排名，第二格 = 当前分类的值，其余补齐
-      stats = [['#'+rk, modeName+'排名']];
+      stats = [[String(rk), modeName+'排名']];
       stats.push([CLASS_VAL[useMode], CLASS_NAME[useMode]]);
       for (var oi=0; oi<CLASS_ORDER.length; oi++){
         var k = CLASS_ORDER[oi];
